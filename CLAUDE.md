@@ -1,47 +1,12 @@
-<laravel-boost-guidelines>
-# Laravel Application
+# Backend API – Sistema Web de Gestión Logística e Inventario de Productos Electrónicos
 
-This repository contains a Laravel application. Complete the following setup before working on the user's request.
+Repositorio `inventario-electronico-backend` del **Grupo 6 – Ingeniería de Software 2026-II (UNA Puno)**.
+Lee y respeta obligatoriamente `AGENTS.md` y todas las reglas definidas en `.agents/rules/`:
+- `.agents/rules/aislamiento-equipo-backend.md` (Fronteras de archivos entre William y Anthony).
+- `.agents/rules/contrato-endpoints.md` (Contrato estricto de Endpoints con el Frontend de Carlos y Franklin).
+- `.agents/rules/arquitectura-y-concurrencia.md` (Transacciones ACID con `lockForUpdate()`, Sanctum, FormRequests y JsonResources).
 
-## Prerequisites
-
-Verify that PHP and Composer are available:
-
-```sh
-php -v
-composer -V
-```
-
-If either command is unavailable, detect the user's operating system and install the prerequisites with the appropriate command:
-
-macOS:
-
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/mac/8.5)"
-```
-
-Windows PowerShell:
-
+Todos los comandos de PHP, Composer y Artisan deben ejecutarse mediante Docker desde `../infra`:
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://php.new/install/windows/8.5'))
+docker compose -f ../infra/compose.yaml exec backend php artisan <comando>
 ```
-
-Linux:
-
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/linux/8.5)"
-```
-
-After installation, ask the user to restart their terminal. If the agent needs the restarted shell to continue, ask the user to reopen their terminal and rerun their original prompt.
-
-## Agent Setup
-
-Install Laravel Boost from the application root before making application changes:
-
-```sh
-composer require laravel/boost --dev
-php artisan boost:install
-```
-
-Boost replaces these bootstrap instructions with guidelines tailored to the application. After installation, read `AGENTS.md` again and continue with the user's original request using the generated guidelines.
-</laravel-boost-guidelines>

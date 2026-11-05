@@ -6,3 +6,6 @@ use Illuminate\Support\Facades\Route;
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
+require __DIR__.'/api_transaccional.php';
+require __DIR__.'/api_consultas.php';

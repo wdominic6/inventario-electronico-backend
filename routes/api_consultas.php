@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\StockController;
+use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -11,3 +13,9 @@ use Illuminate\Support\Facades\Route;
 | - /api/alerts/low-stock
 | - /api/reports/dashboard-summary, /api/reports/rotation, /api/reports/kardex/{product}
 */
+
+Route::middleware('auth:sanctum')
+    ->middleware(RoleMiddleware::class.':admin,ventas,almacen')
+    ->group(function (): void {
+        Route::get('/stock/search', [StockController::class, 'buscarStock']);
+    });

@@ -21,6 +21,24 @@ docker compose exec backend php artisan migrate
 
 > Los valores `DB_*` de `.env` deben coincidir con los de `infra/.env` (`DB_HOST=db`).
 
+## Datos de demostración
+
+Para dejar una base limpia con el catálogo de componentes electrónicos, las tres
+sucursales, sus ubicaciones, el inventario inicial y un usuario por rol:
+
+```powershell
+docker compose exec backend php artisan migrate:fresh --seed
+```
+
+El comando elimina y recrea todas las tablas. Las credenciales sembradas para la
+demo son:
+
+| Rol | Usuario | Contraseña |
+|---|---|---|
+| Administrador | `admin@inventario.test` | `Admin#2026` |
+| Ventas | `ventas@inventario.test` | `Ventas#2026` |
+| Almacén | `almacen@inventario.test` | `Almacen#2026` |
+
 ## Comandos útiles
 ```powershell
 docker compose exec backend php artisan test            # pruebas (PHPUnit)

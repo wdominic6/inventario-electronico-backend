@@ -20,4 +20,9 @@ class Sucursal extends Model
     {
         return $this->hasMany(Ubicacion::class, 'id_sucursal', 'id_sucursal');
     }
+
+    public function stocks(): HasMany
+    {
+        return $this->hasMany(Stock::class, 'id_sucursal', 'id_sucursal');
+    }
 }

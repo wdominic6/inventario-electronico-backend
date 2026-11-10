@@ -25,11 +25,9 @@ class SearchStockRequest extends FormRequest
     {
         return [
             'q' => ['nullable', 'string', 'min:2', 'max:200'],
-            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
-            'package_type' => ['nullable', 'string', 'max:50'],
-            'voltage' => ['nullable', 'string', 'max:50'],
-            'only_available' => ['sometimes', 'boolean'],
+            'categoria' => ['nullable', 'string', 'max:100'],
+            'sucursal' => ['nullable', 'string', 'max:100'],
+            'solo_disponibles' => ['sometimes', 'boolean'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
@@ -41,8 +39,6 @@ class SearchStockRequest extends FormRequest
     {
         return [
             'q.min' => 'El criterio de búsqueda debe tener como mínimo 2 caracteres.',
-            'category_id.exists' => 'La categoría seleccionada no existe.',
-            'branch_id.exists' => 'La sucursal seleccionada no existe.',
         ];
     }
 }

@@ -4,62 +4,75 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Stock\SearchStockRequest;
-use App\Http\Resources\ProductResource;
-use App\Models\Product;
+use App\Http\Resources\StockSearchResource;
+use App\Models\Producto;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class StockController extends Controller
 {
     /**
-     * GET /api/stock/search
+     * GET /api/stock
+     *
+     * Retorna cada producto una sola vez, con el stock total y el desglose
+     * por sucursal y ubicación.
      */
     public function buscarStock(SearchStockRequest $request): AnonymousResourceCollection
     {
-        $query = Product::query()
-            ->with(['category', 'stocks.branch', 'stocks.location'])
-            ->withSum('stocks', 'quantity')
-            ->where('is_active', true);
+        $query = Producto::query()
+            ->with([
+                'categoria',
+                'stocks.sucursal',
+                'stocks.ubicacion',
+            ])
+            ->where('estado', 'activo');
 
         if ($request->filled('q')) {
             $search = $request->string('q')->toString();
             $query->where(function (Builder $products) use ($search): void {
                 $products
-                    ->where('sku', 'like', "%{$search}%")
-                    ->orWhere('barcode', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhere('model', 'like', "%{$search}%");
+                    ->where('codigo', 'like', "%{$search}%")
+                    ->orWhere('nombre', 'like', "%{$search}%")
+                    ->orWhere('modelo', 'like', "%{$search}%")
+                    ->orWhereRaw('CAST(especificaciones_extra AS CHAR) LIKE ?', ["%{$search}%"])
+                    ->orWhereHas('atributos', function (Builder $attributes) use ($search): void {
+                        $attributes->where('nombre_atributo', 'like', "%{$search}%")
+                            ->orWhere('producto_atributo_valores.valor_texto', 'like', "%{$search}%")
+                            ->orWhereRaw('CAST(producto_atributo_valores.valor_numero AS CHAR) LIKE ?', ["%{$search}%"]);
+                    });
             });
         }
 
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->integer('category_id'));
-        }
-
-        if ($request->filled('branch_id')) {
-            $query->whereHas('stocks', function (Builder $stocks) use ($request): void {
-                $stocks->where('branch_id', $request->integer('branch_id'));
+        if ($request->filled('categoria')) {
+            $categoria = $request->string('categoria')->toString();
+            $query->whereHas('categoria', function (Builder $categories) use ($categoria): void {
+                $categories->where('nombre_categoria', 'like', "%{$categoria}%");
+                if (ctype_digit($categoria)) {
+                    $categories->orWhere('id_categoria', (int) $categoria);
+                }
             });
         }
 
-        if ($request->filled('package_type')) {
-            $query->where('specs->package_type', $request->string('package_type')->toString());
+        if ($request->filled('sucursal')) {
+            $sucursal = $request->string('sucursal')->toString();
+            $query->whereHas('stocks.sucursal', function (Builder $branches) use ($sucursal): void {
+                $branches->where('nombre_sucursal', 'like', "%{$sucursal}%");
+                if (ctype_digit($sucursal)) {
+                    $branches->orWhere('id_sucursal', (int) $sucursal);
+                }
+            });
         }
 
-        if ($request->filled('voltage')) {
-            $query->where('specs->voltage', $request->string('voltage')->toString());
-        }
-
-        if ($request->boolean('only_available')) {
+        if ($request->boolean('solo_disponibles')) {
             $query->whereHas('stocks', function (Builder $stocks): void {
-                $stocks->where('quantity', '>', 0);
+                $stocks->where('cantidad', '>', 0);
             });
         }
 
         $perPage = $request->integer('per_page', 15);
 
-        return ProductResource::collection(
-            $query->orderBy('name')->paginate($perPage)->withQueryString()
+        return StockSearchResource::collection(
+            $query->orderBy('nombre')->paginate($perPage)->withQueryString()
         );
     }
 }

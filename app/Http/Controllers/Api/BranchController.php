@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\StoreBranchRequest;
 use App\Http\Requests\Catalog\UpdateBranchRequest;
 use App\Http\Resources\BranchResource;
-use App\Models\Branch;
+use App\Models\Sucursal;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,23 +24,24 @@ class BranchController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Branch::query();
+        $query = Sucursal::query();
 
         if ($request->filled('is_active')) {
-            $query->where('is_active', $request->boolean('is_active'));
+            $query->where('estado', $request->boolean('is_active') ? 'activa' : 'inactiva');
         }
 
         if ($request->filled('q')) {
             $search = $request->string('q')->toString();
             $query->where(function ($subQuery) use ($search): void {
-                $subQuery->where('name', 'like', "%{$search}%")
-                    ->orWhere('code', 'like', "%{$search}%")
-                    ->orWhere('address', 'like', "%{$search}%");
+                $subQuery->where('nombre_sucursal', 'like', "%{$search}%")
+                    ->orWhere('codigo', 'like', "%{$search}%")
+                    ->orWhere('direccion', 'like', "%{$search}%")
+                    ->orWhere('telefono', 'like', "%{$search}%");
             });
         }
 
         return BranchResource::collection(
-            $query->orderBy('name')->get()
+            $query->orderBy('nombre_sucursal')->get()
         );
     }
 
@@ -50,15 +51,21 @@ class BranchController extends Controller
     public function store(StoreBranchRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data['is_active'] = $data['is_active'] ?? true;
+        $data = [
+            'codigo' => $data['code'],
+            'nombre_sucursal' => $data['name'],
+            'direccion' => $data['address'] ?? null,
+            'telefono' => $data['phone'] ?? null,
+            'estado' => ($data['is_active'] ?? true) ? 'activa' : 'inactiva',
+        ];
 
-        $branch = Branch::query()->create($data);
+        $branch = Sucursal::query()->create($data);
 
         $this->auditService->log(
             action: 'branch.created',
             entityType: 'Branch',
-            entityId: $branch->id,
-            description: 'Creación de sucursal '.$branch->name.' ('.$branch->code.')',
+            entityId: $branch->id_sucursal,
+            description: 'Creación de sucursal '.$branch->nombre_sucursal,
             details: $data,
             request: $request
         );
@@ -71,15 +78,24 @@ class BranchController extends Controller
     /**
      * PUT /api/branches/{branch}
      */
-    public function update(UpdateBranchRequest $request, Branch $branch): BranchResource
+    public function update(UpdateBranchRequest $request, Sucursal $branch): BranchResource
     {
-        $branch->update($request->validated());
+        $data = $request->validated();
+        $branch->update([
+            'codigo' => $data['code'] ?? $branch->codigo,
+            'nombre_sucursal' => $data['name'] ?? $branch->nombre_sucursal,
+            'direccion' => $data['address'] ?? $branch->direccion,
+            'telefono' => $data['phone'] ?? $branch->telefono,
+            'estado' => array_key_exists('is_active', $data)
+                ? ($data['is_active'] ? 'activa' : 'inactiva')
+                : $branch->estado,
+        ]);
 
         $this->auditService->log(
             action: 'branch.updated',
             entityType: 'Branch',
-            entityId: $branch->id,
-            description: 'Actualización de sucursal '.$branch->name,
+            entityId: $branch->id_sucursal,
+            description: 'Actualización de sucursal '.$branch->nombre_sucursal,
             details: $request->validated(),
             request: $request
         );
@@ -90,16 +106,16 @@ class BranchController extends Controller
     /**
      * DELETE /api/branches/{branch}
      */
-    public function destroy(Request $request, Branch $branch): Response|JsonResponse
+    public function destroy(Request $request, Sucursal $branch): Response|JsonResponse
     {
-        if (method_exists($branch, 'stocks') && $branch->stocks()->where('quantity', '>', 0)->exists()) {
+        if ($branch->stocks()->where('cantidad', '>', 0)->exists()) {
             return response()->json([
                 'message' => 'No se puede eliminar la sucursal porque aún registra existencias de inventario activas.',
             ], 409);
         }
 
-        $branchId = $branch->id;
-        $branchName = $branch->name;
+        $branchId = $branch->id_sucursal;
+        $branchName = $branch->nombre_sucursal;
         $branch->delete();
 
         $this->auditService->log(

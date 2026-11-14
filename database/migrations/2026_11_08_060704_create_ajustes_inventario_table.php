@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('codigo_ajuste', 50)->unique();
             $table->foreignId('id_sucursal')->constrained('sucursales', 'id_sucursal');
             $table->foreignId('id_usuario')->constrained('usuarios', 'id_usuario');
-            $table->text('motivo');
+            $table->string('motivo', 255);
             $table->timestamp('fecha_ajuste')->useCurrent();
             $table->string('estado', 30)->default('Aplicado');
         });

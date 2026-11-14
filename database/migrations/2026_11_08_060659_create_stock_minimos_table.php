@@ -14,7 +14,8 @@ return new class extends Migration
             $table->foreignId('id_producto')->constrained('productos', 'id_producto')->onDelete('cascade');
             $table->foreignId('id_sucursal')->constrained('sucursales', 'id_sucursal')->onDelete('cascade');
             $table->integer('stock_minimo')->default(0);
-            $table->timestamps();
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
 
             $table->unique(['id_producto', 'id_sucursal'], 'uq_stock_minimo_producto_sucursal');
         });

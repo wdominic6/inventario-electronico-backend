@@ -13,16 +13,15 @@ class LocationResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
-            'branch_id' => $this->branch_id,
-            'branch' => new BranchResource($this->whenLoaded('branch')),
-            'code' => $this->code,
-            'shelf' => $this->shelf,
-            'level' => $this->level,
-            'bin' => $this->bin,
-            'description' => $this->description,
-            'created_at' => $this->created_at?->toISOString(),
-            'updated_at' => $this->updated_at?->toISOString(),
+            'id' => $this->id_ubicacion,
+            'branch_id' => $this->id_sucursal,
+            'branch' => new BranchResource($this->whenLoaded('sucursal')),
+            'code' => $this->codigo,
+            'shelf' => $this->estante,
+            'level' => $this->nivel,
+            'bin' => $this->casillero,
+            'is_active' => $this->estado === 'disponible',
+            'description' => $this->descripcion,
         ];
     }
 }

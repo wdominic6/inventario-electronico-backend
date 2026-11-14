@@ -13,8 +13,7 @@ class Sucursal extends Model
     protected $table = 'sucursales';
     protected $primaryKey = 'id_sucursal';
     public $timestamps = false;
-
-    protected $fillable = ['nombre_sucursal', 'direccion', 'telefono', 'estado'];
+    protected $fillable = ['codigo', 'nombre_sucursal', 'direccion', 'telefono', 'estado'];
 
     public function ubicaciones(): HasMany
     {

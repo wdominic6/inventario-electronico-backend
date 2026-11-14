@@ -5,12 +5,11 @@ namespace App\Services;
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Throwable;
 
 class AuditService
 {
     /**
-     * Registra un evento de auditoría en la tabla audit_logs.
+     * Registra un evento de auditoría en la tabla logs_auditoria.
      *
      * @param  array<string, mixed>|null  $details
      */
@@ -23,27 +22,24 @@ class AuditService
         ?int $userId = null,
         ?Request $request = null
     ): ?AuditLog {
-        if (! class_exists(AuditLog::class)) {
-            return null;
-        }
-
         $request ??= request();
         $resolvedUserId = $userId ?? Auth::id();
 
-        try {
-            return AuditLog::query()->create([
-                'user_id' => $resolvedUserId,
-                'action' => $action,
-                'entity_type' => $entityType,
-                'entity_id' => $entityId,
-                'description' => $description,
-                'details' => $details,
-                'ip_address' => $request?->ip(),
-                'user_agent' => $request?->userAgent(),
-            ]);
-        } catch (Throwable) {
-            // Evita interrumpir el flujo si la tabla audit_logs aún no ha sido migrada en entorno de pruebas.
+        if ($resolvedUserId === null) {
             return null;
         }
+
+        return AuditLog::query()->create([
+            'id_usuario' => $resolvedUserId,
+            'accion' => $action,
+            'tabla_afectada' => $entityType ?? 'sistema',
+            'registro_id' => $entityId,
+            'valores_nuevos' => array_filter([
+                'descripcion' => $description,
+                'detalles' => $details,
+            ], static fn ($value): bool => $value !== null),
+            'ip_address' => $request?->ip(),
+            'user_agent' => $request?->userAgent(),
+        ]);
     }
 }

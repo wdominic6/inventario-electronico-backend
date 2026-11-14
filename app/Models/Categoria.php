@@ -14,8 +14,7 @@ class Categoria extends Model
     protected $table = 'categorias';
     protected $primaryKey = 'id_categoria';
     public $timestamps = false;
-
-    protected $fillable = ['nombre_categoria', 'descripcion'];
+    protected $fillable = ['nombre_categoria', 'prefijo_codigo', 'descripcion'];
 
     public function atributos(): BelongsToMany
     {

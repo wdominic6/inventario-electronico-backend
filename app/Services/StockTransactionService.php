@@ -2,11 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\InventoryMovement;
-use App\Models\Product;
-use App\Models\ProductStock;
-use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use App\Models\Proveedor;
 
 class StockTransactionService
 {
@@ -15,343 +14,214 @@ class StockTransactionService
     ) {}
 
     /**
-     * Registra una entrada de mercancía (recepción de proveedor o ajuste positivo)
-     * dentro de una transacción ACID con bloqueo pesimista por fila (FOR UPDATE).
-     *
      * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
-    public function registerEntry(array $data, int $userId): InventoryMovement
+    public function registerEntry(array $data, int $userId): array
     {
-        return DB::transaction(function () use ($data, $userId): InventoryMovement {
-            $branchId = (int) $data['branch_id'];
+        return DB::transaction(function () use ($data, $userId): array {
+            $entryId = DB::table('entradas_inventario')->insertGetId([
+                'codigo_entrada' => $data['reference_code'] ?? 'ENT-'.Str::upper(Str::random(10)),
+                'id_sucursal' => $data['branch_id'],
+                'id_proveedor' => Proveedor::query()->firstOrCreate(
+                    ['razon_social' => trim($data['supplier_name'])],
+                    ['estado' => 'activo']
+                )->id_proveedor,
+                'id_usuario' => $userId,
+                'estado' => 'Completado',
+                'observacion' => $data['notes'] ?? null,
+            ], 'id_entrada');
 
-            // Ordenar ítems por product_id y location_id para prevenir deadlocks en MySQL 8.4 InnoDB
-            $items = collect($data['items'])
-                ->sortBy([
-                    ['product_id', 'asc'],
-                    ['location_id', 'asc'],
-                ])
-                ->values();
+            $items = [];
+            foreach ($data['items'] as $item) {
+                $stock = $this->lockStock($data['branch_id'], $item['product_id'], $item['location_id']);
+                $previous = (int) ($stock?->cantidad ?? 0);
+                $new = $previous + (int) $item['quantity'];
+                $this->saveStock($data['branch_id'], $item['product_id'], $item['location_id'], $new);
 
-            $movement = InventoryMovement::query()->create([
-                'type' => 'entry',
-                'branch_id' => $branchId,
-                'source_branch_id' => null,
-                'target_branch_id' => $branchId,
-                'user_id' => $userId,
-                'reference_code' => $data['reference_code'] ?? null,
-                'supplier_name' => $data['supplier_name'] ?? null,
-                'reason' => 'purchase_entry',
-                'notes' => $data['notes'] ?? null,
-            ]);
+                DB::table('detalles_entrada')->insert([
+                    'id_entrada' => $entryId,
+                    'id_producto' => $item['product_id'],
+                    'id_ubicacion' => $item['location_id'],
+                    'cantidad' => $item['quantity'],
+                    'costo_unitario' => $item['unit_cost'] ?? null,
+                ]);
+                $this->writeKardex($userId, $data['branch_id'], $item, 'Entrada Compra', $item['quantity'], $previous, $new, $entryId);
+                $items[] = [...$item, 'stock_anterior' => $previous, 'stock_resultante' => $new];
+            }
 
-            foreach ($items as $item) {
-                $productId = (int) $item['product_id'];
-                $locationId = (int) $item['location_id'];
+            $this->auditService->log('inventory.entry', 'entradas_inventario', $entryId, 'Entrada de inventario', ['items' => count($items)], $userId);
+
+            return ['id' => $entryId, 'type' => 'entry', 'items' => $items];
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function registerExit(array $data, int $userId): array
+    {
+        return DB::transaction(function () use ($data, $userId): array {
+            $exitId = DB::table('salidas_inventario')->insertGetId([
+                'codigo_salida' => $data['reference_code'] ?? 'SAL-'.Str::upper(Str::random(10)),
+                'id_sucursal' => $data['branch_id'],
+                'id_usuario' => $userId,
+                'cliente_referencia' => $data['customer_reference'] ?? null,
+                'estado' => 'Completado',
+                'observacion' => $data['notes'] ?? $data['reason'],
+            ], 'id_salida');
+
+            $items = [];
+            foreach ($data['items'] as $item) {
+                $stock = $this->lockStock($data['branch_id'], $item['product_id'], $item['location_id']);
+                $previous = (int) ($stock?->cantidad ?? 0);
                 $quantity = (int) $item['quantity'];
-                $unitCost = isset($item['unit_cost']) ? (float) $item['unit_cost'] : null;
-
-                $stock = $this->lockOrCreateStockRow($branchId, $productId, $locationId);
-
-                $previousStock = (int) $stock->quantity;
-                $newStock = $previousStock + $quantity;
-
-                $stock->update([
-                    'quantity' => $newStock,
-                ]);
-
-                $movement->items()->create([
-                    'product_id' => $productId,
-                    'location_id' => $locationId,
-                    'target_location_id' => null,
-                    'quantity' => $quantity,
-                    'unit_cost' => $unitCost,
-                    'previous_stock' => $previousStock,
-                    'new_stock' => $newStock,
-                ]);
-            }
-
-            $this->auditService->log(
-                action: 'movement.entry',
-                entityType: 'InventoryMovement',
-                entityId: $movement->id,
-                description: 'Registro de entrada de mercancía en sucursal #'.$branchId,
-                details: [
-                    'branch_id' => $branchId,
-                    'reference_code' => $movement->reference_code,
-                    'items_count' => $items->count(),
-                ],
-                userId: $userId
-            );
-
-            return $movement->load([
-                'user',
-                'branch',
-                'items.product',
-                'items.location',
-            ]);
-        });
-    }
-
-    /**
-     * Registra una salida de mercancía (venta, baja por daño o uso interno)
-     * validando existencias con bloqueo pesimista (SELECT ... FOR UPDATE).
-     *
-     * @param  array<string, mixed>  $data
-     */
-    public function registerExit(array $data, int $userId): InventoryMovement
-    {
-        return DB::transaction(function () use ($data, $userId): InventoryMovement {
-            $branchId = (int) $data['branch_id'];
-
-            // Ordenar ítems por product_id y location_id para prevenir deadlocks
-            $items = collect($data['items'])
-                ->sortBy([
-                    ['product_id', 'asc'],
-                    ['location_id', 'asc'],
-                ])
-                ->values();
-
-            $movement = InventoryMovement::query()->create([
-                'type' => 'exit',
-                'branch_id' => $branchId,
-                'source_branch_id' => $branchId,
-                'target_branch_id' => null,
-                'user_id' => $userId,
-                'reference_code' => $data['reference_code'] ?? null,
-                'supplier_name' => null,
-                'reason' => $data['reason'],
-                'notes' => $data['notes'] ?? null,
-            ]);
-
-            foreach ($items as $item) {
-                $productId = (int) $item['product_id'];
-                $locationId = (int) $item['location_id'];
-                $requestedQuantity = (int) $item['quantity'];
-
-                $stock = ProductStock::query()
-                    ->where('branch_id', $branchId)
-                    ->where('product_id', $productId)
-                    ->where('location_id', $locationId)
-                    ->lockForUpdate()
-                    ->first();
-
-                $availableQuantity = $stock ? (int) $stock->quantity : 0;
-
-                if (! $stock || $availableQuantity < $requestedQuantity) {
-                    $productLabel = $this->resolveProductLabel($productId);
-
-                    throw new HttpResponseException(response()->json([
-                        'message' => sprintf(
-                            'Stock insuficiente para el componente %s en la ubicación seleccionada. Disponible: %d, solicitado: %d.',
-                            $productLabel,
-                            $availableQuantity,
-                            $requestedQuantity
-                        ),
-                    ], 409));
+                if ($previous < $quantity) {
+                    throw new ConflictHttpException('Stock insuficiente para el producto '.$item['product_id'].'.');
                 }
 
-                $previousStock = $availableQuantity;
-                $newStock = $previousStock - $requestedQuantity;
-
-                $stock->update([
-                    'quantity' => $newStock,
+                $new = $previous - $quantity;
+                $this->saveStock($data['branch_id'], $item['product_id'], $item['location_id'], $new);
+                DB::table('detalles_salida')->insert([
+                    'id_salida' => $exitId,
+                    'id_producto' => $item['product_id'],
+                    'id_ubicacion' => $item['location_id'],
+                    'cantidad' => $quantity,
                 ]);
-
-                $movement->items()->create([
-                    'product_id' => $productId,
-                    'location_id' => $locationId,
-                    'target_location_id' => null,
-                    'quantity' => $requestedQuantity,
-                    'unit_cost' => null,
-                    'previous_stock' => $previousStock,
-                    'new_stock' => $newStock,
-                ]);
+                $this->writeKardex($userId, $data['branch_id'], $item, 'Salida Venta', $quantity, $previous, $new, null, $exitId);
+                $items[] = [...$item, 'stock_anterior' => $previous, 'stock_resultante' => $new];
             }
 
-            $this->auditService->log(
-                action: 'movement.exit',
-                entityType: 'InventoryMovement',
-                entityId: $movement->id,
-                description: 'Registro de salida de mercancía ('.$data['reason'].') en sucursal #'.$branchId,
-                details: [
-                    'branch_id' => $branchId,
-                    'reason' => $data['reason'],
-                    'reference_code' => $movement->reference_code,
-                    'items_count' => $items->count(),
-                ],
-                userId: $userId
-            );
+            $this->auditService->log('inventory.exit', 'salidas_inventario', $exitId, 'Salida de inventario', ['items' => count($items)], $userId);
 
-            return $movement->load([
-                'user',
-                'branch',
-                'items.product',
-                'items.location',
-            ]);
+            return ['id' => $exitId, 'type' => 'exit', 'items' => $items];
         });
     }
 
     /**
-     * Registra un traslado entre sucursales (descuenta en origen e incrementa en destino
-     * dentro de una única transacción ACID con bloqueo pesimista).
-     *
      * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
-    public function registerTransfer(array $data, int $userId): InventoryMovement
+    public function registerTransfer(array $data, int $userId): array
     {
-        return DB::transaction(function () use ($data, $userId): InventoryMovement {
-            $sourceBranchId = (int) $data['source_branch_id'];
-            $targetBranchId = (int) $data['target_branch_id'];
+        return DB::transaction(function () use ($data, $userId): array {
+            $transferId = DB::table('transferencias')->insertGetId([
+                'codigo_transferencia' => $data['reference_code'] ?? 'TRA-'.Str::upper(Str::random(10)),
+                'id_sucursal_origen' => $data['source_branch_id'],
+                'id_sucursal_destino' => $data['target_branch_id'],
+                'id_usuario_solicitante' => $userId,
+                'estado' => 'Aprobada',
+                'estado_logistico' => 'Recibida Completa',
+                'fecha_despacho' => now(),
+                'fecha_recepcion' => now(),
+            ], 'id_transferencia');
 
-            // Ordenar ítems de forma determinista para prevenir deadlocks entre sucursales
-            $items = collect($data['items'])
-                ->sortBy([
-                    ['product_id', 'asc'],
-                    ['source_location_id', 'asc'],
-                    ['target_location_id', 'asc'],
-                ])
-                ->values();
-
-            $movement = InventoryMovement::query()->create([
-                'type' => 'transfer',
-                'branch_id' => $sourceBranchId,
-                'source_branch_id' => $sourceBranchId,
-                'target_branch_id' => $targetBranchId,
-                'user_id' => $userId,
-                'reference_code' => $data['reference_code'] ?? null,
-                'supplier_name' => null,
-                'reason' => 'branch_transfer',
-                'notes' => $data['notes'] ?? null,
-            ]);
-
-            foreach ($items as $item) {
-                $productId = (int) $item['product_id'];
-                $sourceLocationId = (int) $item['source_location_id'];
-                $targetLocationId = (int) $item['target_location_id'];
-                $requestedQuantity = (int) $item['quantity'];
-
-                $sourceStock = ProductStock::query()
-                    ->where('branch_id', $sourceBranchId)
-                    ->where('product_id', $productId)
-                    ->where('location_id', $sourceLocationId)
-                    ->lockForUpdate()
-                    ->first();
-
-                $availableQuantity = $sourceStock ? (int) $sourceStock->quantity : 0;
-
-                if (! $sourceStock || $availableQuantity < $requestedQuantity) {
-                    $productLabel = $this->resolveProductLabel($productId);
-
-                    throw new HttpResponseException(response()->json([
-                        'message' => sprintf(
-                            'Stock insuficiente en la sucursal de origen para trasladar el componente %s. Disponible: %d, solicitado: %d.',
-                            $productLabel,
-                            $availableQuantity,
-                            $requestedQuantity
-                        ),
-                    ], 409));
+            $items = [];
+            foreach ($data['items'] as $item) {
+                $source = $this->lockStock($data['source_branch_id'], $item['product_id'], $item['source_location_id']);
+                $previous = (int) ($source?->cantidad ?? 0);
+                $quantity = (int) $item['quantity'];
+                if ($previous < $quantity) {
+                    throw new ConflictHttpException('Stock insuficiente para el producto '.$item['product_id'].'.');
                 }
 
-                $sourcePreviousStock = $availableQuantity;
-                $sourceNewStock = $sourcePreviousStock - $requestedQuantity;
+                $new = $previous - $quantity;
+                $this->saveStock($data['source_branch_id'], $item['product_id'], $item['source_location_id'], $new);
+                $target = $this->lockStock($data['target_branch_id'], $item['product_id'], $item['target_location_id']);
+                $targetNew = (int) ($target?->cantidad ?? 0) + $quantity;
+                $this->saveStock($data['target_branch_id'], $item['product_id'], $item['target_location_id'], $targetNew);
 
-                $sourceStock->update([
-                    'quantity' => $sourceNewStock,
+                DB::table('detalles_transferencia')->insert([
+                    'id_transferencia' => $transferId,
+                    'id_producto' => $item['product_id'],
+                    'id_ubicacion_origen' => $item['source_location_id'],
+                    'id_ubicacion_destino' => $item['target_location_id'],
+                    'cantidad_solicitada' => $quantity,
+                    'cantidad_enviada' => $quantity,
+                    'cantidad_recibida' => $quantity,
                 ]);
-
-                $targetStock = $this->lockOrCreateStockRow($targetBranchId, $productId, $targetLocationId);
-                $targetPreviousStock = (int) $targetStock->quantity;
-                $targetNewStock = $targetPreviousStock + $requestedQuantity;
-
-                $targetStock->update([
-                    'quantity' => $targetNewStock,
-                ]);
-
-                $movement->items()->create([
-                    'product_id' => $productId,
-                    'location_id' => $sourceLocationId,
-                    'target_location_id' => $targetLocationId,
-                    'quantity' => $requestedQuantity,
-                    'unit_cost' => null,
-                    'previous_stock' => $sourcePreviousStock,
-                    'new_stock' => $sourceNewStock,
-                ]);
+                $this->writeKardex($userId, $data['source_branch_id'], [
+                    'product_id' => $item['product_id'],
+                    'location_id' => $item['source_location_id'],
+                ], 'Traslado Saliente', $quantity, $previous, $new, null, null, null, $transferId);
+                $this->writeKardex($userId, $data['target_branch_id'], [
+                    'product_id' => $item['product_id'],
+                    'location_id' => $item['target_location_id'],
+                ], 'Traslado Entrante', $quantity, $target?->cantidad ?? 0, $targetNew, null, null, null, $transferId);
+                $items[] = [...$item, 'stock_anterior' => $previous, 'stock_resultante' => $new];
             }
 
-            $this->auditService->log(
-                action: 'movement.transfer',
-                entityType: 'InventoryMovement',
-                entityId: $movement->id,
-                description: sprintf('Traslado de mercancía desde sucursal #%d hacia sucursal #%d', $sourceBranchId, $targetBranchId),
-                details: [
-                    'source_branch_id' => $sourceBranchId,
-                    'target_branch_id' => $targetBranchId,
-                    'reference_code' => $movement->reference_code,
-                    'items_count' => $items->count(),
-                ],
-                userId: $userId
-            );
+            $this->auditService->log('inventory.transfer', 'transferencias', $transferId, 'Transferencia de inventario', ['items' => count($items)], $userId);
 
-            return $movement->load([
-                'user',
-                'branch',
-                'sourceBranch',
-                'targetBranch',
-                'items.product',
-                'items.location',
-                'items.targetLocation',
-            ]);
+            return ['id' => $transferId, 'type' => 'transfer', 'items' => $items];
         });
     }
 
-    /**
-     * Obtiene y bloquea con FOR UPDATE la fila de stock para (branch, product, location).
-     * Si no existe aún el registro en product_stocks, lo inicializa en 0 y lo bloquea.
-     */
-    protected function lockOrCreateStockRow(int $branchId, int $productId, int $locationId): ProductStock
+    private function lockStock(int $branchId, int $productId, int $locationId): ?object
     {
-        $stock = ProductStock::query()
-            ->where('branch_id', $branchId)
-            ->where('product_id', $productId)
-            ->where('location_id', $locationId)
+        return DB::table('stocks')
+            ->where('id_sucursal', $branchId)
+            ->where('id_producto', $productId)
+            ->where('id_ubicacion', $locationId)
             ->lockForUpdate()
             ->first();
-
-        if ($stock) {
-            return $stock;
-        }
-
-        ProductStock::query()->firstOrCreate(
-            [
-                'branch_id' => $branchId,
-                'product_id' => $productId,
-                'location_id' => $locationId,
-            ],
-            [
-                'quantity' => 0,
-            ]
-        );
-
-        return ProductStock::query()
-            ->where('branch_id', $branchId)
-            ->where('product_id', $productId)
-            ->where('location_id', $locationId)
-            ->lockForUpdate()
-            ->firstOrFail();
     }
 
-    /**
-     * Obtiene una etiqueta legible del componente electrónico para mensajes de conflicto 409.
-     */
-    protected function resolveProductLabel(int $productId): string
+    private function saveStock(int $branchId, int $productId, int $locationId, int $quantity): void
     {
-        $product = Product::query()->find($productId);
+        $stock = DB::table('stocks')
+            ->where('id_sucursal', $branchId)
+            ->where('id_producto', $productId)
+            ->where('id_ubicacion', $locationId)
+            ->first();
 
-        if (! $product) {
-            return '#'.$productId;
+        if ($stock === null) {
+            DB::table('stocks')->insert([
+                'id_producto' => $productId,
+                'id_sucursal' => $branchId,
+                'id_ubicacion' => $locationId,
+                'cantidad' => $quantity,
+            ]);
+            return;
         }
 
-        return sprintf('"%s" (SKU: %s)', $product->name, $product->sku);
+        DB::table('stocks')
+            ->where('id_stock', $stock->id_stock)
+            ->update(['cantidad' => $quantity]);
+    }
+
+    private function writeKardex(
+        int $userId,
+        int $branchId,
+        array $item,
+        string $type,
+        int $quantity,
+        int $previous,
+        int $result,
+        ?int $entryId = null,
+        ?int $exitId = null,
+        ?int $adjustmentId = null,
+        ?int $transferId = null
+    ): void {
+        $movementType = DB::table('tipos_movimiento')->where('nombre_tipo', $type)->value('id_tipo_movimiento');
+        if ($movementType === null) {
+            throw new \RuntimeException('No existe el tipo de movimiento configurado: '.$type);
+        }
+
+        DB::table('movimientos_kardex')->insert([
+            'id_producto' => $item['product_id'],
+            'id_sucursal' => $branchId,
+            'id_ubicacion' => $item['location_id'],
+            'id_usuario' => $userId,
+            'id_tipo_movimiento' => $movementType,
+            'id_entrada' => $entryId,
+            'id_salida' => $exitId,
+            'id_ajuste' => $adjustmentId,
+            'id_transferencia' => $transferId,
+            'cantidad' => $quantity,
+            'stock_anterior' => $previous,
+            'stock_resultante' => $result,
+        ]);
     }
 }

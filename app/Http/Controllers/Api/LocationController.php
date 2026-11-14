@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\StoreLocationRequest;
 use App\Http\Requests\Catalog\UpdateLocationRequest;
 use App\Http\Resources\LocationResource;
-use App\Models\Location;
+use App\Models\Ubicacion;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,25 +24,24 @@ class LocationController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Location::query()->with('branch');
+        $query = Ubicacion::query()->with('sucursal');
 
         if ($request->filled('branch_id')) {
-            $query->where('branch_id', $request->integer('branch_id'));
+            $query->where('id_sucursal', $request->integer('branch_id'));
         }
 
         if ($request->filled('q')) {
             $search = $request->string('q')->toString();
             $query->where(function ($subQuery) use ($search): void {
-                $subQuery->where('code', 'like', "%{$search}%")
-                    ->orWhere('shelf', 'like', "%{$search}%")
-                    ->orWhere('level', 'like', "%{$search}%")
-                    ->orWhere('bin', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                $subQuery->where('estante', 'like', "%{$search}%")
+                    ->orWhere('nivel', 'like', "%{$search}%")
+                    ->orWhere('casillero', 'like', "%{$search}%")
+                    ->orWhere('descripcion', 'like', "%{$search}%");
             });
         }
 
         return LocationResource::collection(
-            $query->orderBy('branch_id')->orderBy('code')->get()
+            $query->orderBy('id_sucursal')->orderBy('estante')->get()
         );
     }
 
@@ -51,14 +50,23 @@ class LocationController extends Controller
      */
     public function store(StoreLocationRequest $request): JsonResponse
     {
-        $location = Location::query()->create($request->validated());
-        $location->load('branch');
+        $data = $request->validated();
+        $location = Ubicacion::query()->create([
+            'id_sucursal' => $data['branch_id'],
+            'codigo' => $data['code'],
+            'estante' => $data['shelf'],
+            'nivel' => $data['level'],
+            'casillero' => $data['bin'],
+            'estado' => 'disponible',
+            'descripcion' => $data['description'] ?? null,
+        ]);
+        $location->load('sucursal');
 
         $this->auditService->log(
             action: 'location.created',
             entityType: 'Location',
-            entityId: $location->id,
-            description: 'Creación de ubicación física '.$location->code,
+            entityId: $location->id_ubicacion,
+            description: 'Creación de ubicación física #'.$location->id_ubicacion,
             details: $request->validated(),
             request: $request
         );
@@ -71,16 +79,24 @@ class LocationController extends Controller
     /**
      * PUT /api/locations/{location}
      */
-    public function update(UpdateLocationRequest $request, Location $location): LocationResource
+    public function update(UpdateLocationRequest $request, Ubicacion $location): LocationResource
     {
-        $location->update($request->validated());
-        $location->load('branch');
+        $data = $request->validated();
+        $location->update([
+            'id_sucursal' => $data['branch_id'] ?? $location->id_sucursal,
+            'codigo' => $data['code'] ?? $location->codigo,
+            'estante' => $data['shelf'] ?? $location->estante,
+            'nivel' => $data['level'] ?? $location->nivel,
+            'casillero' => $data['bin'] ?? $location->casillero,
+            'descripcion' => $data['description'] ?? $location->descripcion,
+        ]);
+        $location->load('sucursal');
 
         $this->auditService->log(
             action: 'location.updated',
             entityType: 'Location',
-            entityId: $location->id,
-            description: 'Actualización de ubicación física '.$location->code,
+            entityId: $location->id_ubicacion,
+            description: 'Actualización de ubicación física #'.$location->id_ubicacion,
             details: $request->validated(),
             request: $request
         );
@@ -91,23 +107,22 @@ class LocationController extends Controller
     /**
      * DELETE /api/locations/{location}
      */
-    public function destroy(Request $request, Location $location): Response|JsonResponse
+    public function destroy(Request $request, Ubicacion $location): Response|JsonResponse
     {
-        if (method_exists($location, 'stocks') && $location->stocks()->where('quantity', '>', 0)->exists()) {
+        if ($location->stocks()->where('cantidad', '>', 0)->exists()) {
             return response()->json([
                 'message' => 'No se puede eliminar la ubicación física porque contiene stock disponible.',
             ], 409);
         }
 
-        $locationId = $location->id;
-        $locationCode = $location->code;
+        $locationId = $location->id_ubicacion;
         $location->delete();
 
         $this->auditService->log(
             action: 'location.deleted',
             entityType: 'Location',
             entityId: $locationId,
-            description: 'Eliminación de ubicación física '.$locationCode,
+            description: 'Eliminación de ubicación física '.$location->codigo,
             request: $request
         );
 

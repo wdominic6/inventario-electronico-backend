@@ -17,10 +17,10 @@ class StoreBranchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['required', 'string', 'max:30', 'unique:branches,code'],
-            'name' => ['required', 'string', 'max:150'],
+            'code' => ['required', 'string', 'max:30', 'unique:sucursales,codigo'],
+            'name' => ['required', 'string', 'max:100'],
             'address' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'max:20'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
@@ -31,9 +31,8 @@ class StoreBranchRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'code.required' => 'El código de la sucursal es obligatorio.',
-            'code.unique' => 'Ya existe una sucursal registrada con este código.',
             'name.required' => 'El nombre de la sucursal es obligatorio.',
+            'code.required' => 'El código de la sucursal es obligatorio.',
         ];
     }
 }

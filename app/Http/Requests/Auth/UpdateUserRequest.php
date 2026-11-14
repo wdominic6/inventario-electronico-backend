@@ -17,21 +17,21 @@ class UpdateUserRequest extends FormRequest
      */
     public function rules(): array
     {
-        $userId = $this->route('user')?->id ?? $this->route('user');
+        $userId = $this->route('user')?->id_usuario ?? $this->route('user');
 
         return [
-            'name' => ['sometimes', 'required', 'string', 'max:150'],
+            'name' => ['sometimes', 'required', 'string', 'max:100'],
             'email' => [
                 'sometimes',
                 'required',
                 'string',
                 'email',
-                'max:255',
-                Rule::unique('users', 'email')->ignore($userId),
+                'max:150',
+                Rule::unique('usuarios', 'email')->ignore($userId, 'id_usuario'),
             ],
             'password' => ['nullable', 'string', 'min:8', 'max:100'],
-            'role' => ['sometimes', 'required', 'string', Rule::in(['admin', 'almacen', 'ventas'])],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'role' => ['sometimes', 'required', 'string', 'in:admin,almacen,ventas'],
+            'branch_id' => ['sometimes', 'required', 'integer', 'exists:sucursales,id_sucursal'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

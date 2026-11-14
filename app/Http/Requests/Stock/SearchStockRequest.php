@@ -25,9 +25,11 @@ class SearchStockRequest extends FormRequest
     {
         return [
             'q' => ['nullable', 'string', 'min:2', 'max:200'],
-            'categoria' => ['nullable', 'string', 'max:100'],
-            'sucursal' => ['nullable', 'string', 'max:100'],
-            'solo_disponibles' => ['sometimes', 'boolean'],
+            'category_id' => ['nullable', 'integer', 'exists:categorias,id_categoria'],
+            'branch_id' => ['nullable', 'integer', 'exists:sucursales,id_sucursal'],
+            'package_type' => ['nullable', 'string', 'max:50'],
+            'voltage' => ['nullable', 'string', 'max:50'],
+            'only_available' => ['sometimes', 'boolean'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }

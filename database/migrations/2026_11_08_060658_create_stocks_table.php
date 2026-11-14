@@ -15,7 +15,8 @@ return new class extends Migration
             $table->foreignId('id_sucursal')->constrained('sucursales', 'id_sucursal');
             $table->foreignId('id_ubicacion')->constrained('ubicaciones', 'id_ubicacion');
             $table->integer('cantidad')->default(0);
-            $table->timestamps();
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
 
             // Clave única por combinación física
             $table->unique(['id_producto', 'id_sucursal', 'id_ubicacion'], 'uq_stock_posicion');

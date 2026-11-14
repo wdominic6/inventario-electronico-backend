@@ -18,24 +18,13 @@ class UpdateLocationRequest extends FormRequest
     public function rules(): array
     {
         $location = $this->route('location');
-        $locationId = is_object($location) ? $location->id : $location;
-        $branchId = $this->input('branch_id', is_object($location) ? $location->branch_id : null);
-
         return [
-            'branch_id' => ['sometimes', 'required', 'integer', 'exists:branches,id'],
-            'code' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:50',
-                Rule::unique('locations', 'code')
-                    ->where(fn ($query) => $query->where('branch_id', $branchId))
-                    ->ignore($locationId),
-            ],
+            'branch_id' => ['sometimes', 'required', 'integer', 'exists:sucursales,id_sucursal'],
+            'code' => ['sometimes', 'required', 'string', 'max:50', Rule::unique('ubicaciones', 'codigo')->ignore($this->route('location')?->id_ubicacion ?? $this->route('location'), 'id_ubicacion')],
             'shelf' => ['sometimes', 'required', 'string', 'max:50'],
             'level' => ['sometimes', 'required', 'string', 'max:50'],
             'bin' => ['sometimes', 'required', 'string', 'max:50'],
-            'description' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
         ];
     }
 

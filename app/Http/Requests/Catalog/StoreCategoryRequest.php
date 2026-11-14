@@ -17,9 +17,9 @@ class StoreCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:120', 'unique:categories,name'],
-            'code_prefix' => ['required', 'string', 'max:20', 'unique:categories,code_prefix'],
-            'description' => ['nullable', 'string', 'max:500'],
+            'name' => ['required', 'string', 'max:100', 'unique:categorias,nombre_categoria'],
+            'code_prefix' => ['required', 'string', 'max:30', 'unique:categorias,prefijo_codigo'],
+            'description' => ['nullable', 'string'],
         ];
     }
 
@@ -30,9 +30,8 @@ class StoreCategoryRequest extends FormRequest
     {
         return [
             'name.required' => 'El nombre de la categoría es obligatorio.',
+            'code_prefix.required' => 'El prefijo de código es obligatorio.',
             'name.unique' => 'Ya existe una categoría con este nombre.',
-            'code_prefix.required' => 'El prefijo de código para la categoría es obligatorio.',
-            'code_prefix.unique' => 'Este prefijo de código ya está en uso por otra categoría.',
         ];
     }
 }

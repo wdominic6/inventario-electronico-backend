@@ -13,34 +13,38 @@ class StockSearchResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id_producto' => $this->id_producto,
-            'codigo' => $this->codigo,
-            'nombre' => $this->nombre,
-            'modelo' => $this->modelo,
-            'encapsulado' => $this->encapsulado,
-            'voltaje_operacion' => $this->voltaje_operacion,
-            'tolerancia' => $this->tolerancia,
-            'especificaciones_extra' => $this->especificaciones_extra,
-            'categoria' => [
-                'id_categoria' => $this->categoria?->id_categoria,
-                'nombre_categoria' => $this->categoria?->nombre_categoria,
+            'id' => $this->id_producto,
+            'sku' => $this->codigo,
+            'barcode' => $this->codigo_barras,
+            'name' => $this->nombre,
+            'brand' => $this->marca ?? $this->fabricante?->nombre,
+            'model' => $this->modelo,
+            'unit' => $this->unidad?->nombre ?? $this->unidad?->abreviatura,
+            'min_stock' => (int) $this->stock_minimo,
+            'package_type' => $this->encapsulado,
+            'voltage' => $this->voltaje_operacion,
+            'tolerance' => $this->tolerancia,
+            'specs' => $this->especificaciones_extra,
+            'category' => [
+                'id' => $this->categoria?->id_categoria,
+                'name' => $this->categoria?->nombre_categoria,
             ],
-            'stock_total' => (int) $this->stocks->sum('cantidad'),
-            'stock_por_sucursal' => $this->stocks
+            'total_stock' => (int) $this->stocks->sum('cantidad'),
+            'stocks_by_branch' => $this->stocks
                 ->groupBy('id_sucursal')
                 ->map(function ($stocks): array {
                     $primero = $stocks->first();
 
                     return [
-                        'id_sucursal' => $primero->id_sucursal,
-                        'nombre_sucursal' => $primero->sucursal?->nombre_sucursal,
-                        'cantidad' => (int) $stocks->sum('cantidad'),
-                        'ubicaciones' => $stocks->map(fn ($stock): array => [
-                            'id_ubicacion' => $stock->id_ubicacion,
-                            'estante' => $stock->ubicacion?->estante,
-                            'nivel' => $stock->ubicacion?->nivel,
-                            'casillero' => $stock->ubicacion?->casillero,
-                            'cantidad' => (int) $stock->cantidad,
+                        'branch_id' => $primero->id_sucursal,
+                        'branch_name' => $primero->sucursal?->nombre_sucursal,
+                        'total_quantity' => (int) $stocks->sum('cantidad'),
+                        'locations' => $stocks->map(fn ($stock): array => [
+                            'location_id' => $stock->id_ubicacion,
+                            'shelf' => $stock->ubicacion?->estante,
+                            'level' => $stock->ubicacion?->nivel,
+                            'bin' => $stock->ubicacion?->casillero,
+                            'quantity' => (int) $stock->cantidad,
                         ])->values()->all(),
                     ];
                 })->values()->all(),

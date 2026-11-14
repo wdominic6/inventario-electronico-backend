@@ -26,7 +26,7 @@ class AuthController extends Controller
         $credentials = $request->validated();
 
         $user = Usuario::query()
-            ->with('rol')
+            ->with(['rol', 'sucursal'])
             ->where('email', $credentials['email'])
             ->first();
 
@@ -90,6 +90,7 @@ class AuthController extends Controller
     public function me(Request $request): UserResource
     {
         $user = $request->user();
+        $user->load(['rol', 'sucursal']);
 
         return new UserResource($user);
     }

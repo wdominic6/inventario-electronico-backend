@@ -17,13 +17,14 @@ class StoreEntryMovementRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => ['required', 'integer', 'exists:sucursales,id_sucursal'],
+            'supplier_name' => ['required', 'string', 'max:150'],
             'reference_code' => ['nullable', 'string', 'max:100'],
             'supplier_name' => ['nullable', 'string', 'max:150'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'items.*.location_id' => ['required', 'integer', 'exists:locations,id'],
+            'items.*.product_id' => ['required', 'integer', 'exists:productos,id_producto'],
+            'items.*.location_id' => ['required', 'integer', 'exists:ubicaciones,id_ubicacion'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
         ];
@@ -37,6 +38,7 @@ class StoreEntryMovementRequest extends FormRequest
         return [
             'branch_id.required' => 'Debe seleccionar la sucursal de ingreso.',
             'branch_id.exists' => 'La sucursal seleccionada no existe.',
+            'supplier_name.required' => 'El proveedor es obligatorio.',
             'items.required' => 'Debe incluir al menos un componente electrónico en la entrada.',
             'items.min' => 'La entrada debe contener al menos un ítem.',
             'items.*.product_id.required' => 'El identificador del producto es obligatorio en cada línea.',

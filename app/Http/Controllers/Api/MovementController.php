@@ -6,12 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Movement\StoreEntryMovementRequest;
 use App\Http\Requests\Movement\StoreExitMovementRequest;
 use App\Http\Requests\Movement\StoreTransferMovementRequest;
-use App\Http\Resources\MovementResource;
-use App\Models\InventoryMovement;
 use App\Services\StockTransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class MovementController extends Controller
 {
@@ -19,114 +17,68 @@ class MovementController extends Controller
         protected StockTransactionService $stockTransactionService
     ) {}
 
-    /**
-     * GET /api/movements
-     */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): JsonResponse
     {
-        $query = InventoryMovement::query()->with([
-            'user',
-            'branch',
-            'sourceBranch',
-            'targetBranch',
-            'items.product',
-            'items.location',
-            'items.targetLocation',
-        ]);
+        $query = DB::table('movimientos_kardex')
+            ->join('productos', 'productos.id_producto', '=', 'movimientos_kardex.id_producto')
+            ->join('tipos_movimiento', 'tipos_movimiento.id_tipo_movimiento', '=', 'movimientos_kardex.id_tipo_movimiento')
+            ->select([
+                'movimientos_kardex.id_movimiento_kardex as id',
+                'movimientos_kardex.id_producto',
+                'productos.codigo',
+                'productos.nombre',
+                'movimientos_kardex.id_sucursal',
+                'movimientos_kardex.id_ubicacion',
+                'tipos_movimiento.nombre_tipo as type',
+                'movimientos_kardex.cantidad',
+                'movimientos_kardex.stock_anterior',
+                'movimientos_kardex.stock_resultante',
+                'movimientos_kardex.fecha_hora',
+            ]);
 
         if ($request->filled('branch_id')) {
-            $branchId = $request->integer('branch_id');
-            $query->where(function ($subQuery) use ($branchId): void {
-                $subQuery->where('branch_id', $branchId)
-                    ->orWhere('source_branch_id', $branchId)
-                    ->orWhere('target_branch_id', $branchId);
-            });
+            $query->where('id_sucursal', $request->integer('branch_id'));
         }
-
         if ($request->filled('product_id')) {
-            $productId = $request->integer('product_id');
-            $query->whereHas('items', fn ($itemQuery) => $itemQuery->where('product_id', $productId));
+            $query->where('id_producto', $request->integer('product_id'));
         }
-
         if ($request->filled('type')) {
-            $query->where('type', $request->string('type')->toString());
+            $query->where('tipos_movimiento.nombre_tipo', $request->string('type')->toString());
         }
 
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->string('date_from')->toString());
-        }
-
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->string('date_to')->toString());
-        }
-
-        $perPage = min(max($request->integer('per_page', 15), 1), 100);
-
-        return MovementResource::collection(
-            $query->latest('id')->paginate($perPage)
-        );
+        return response()->json($query->orderByDesc('fecha_hora')->paginate(min(max($request->integer('per_page', 15), 1), 100)));
     }
 
-    /**
-     * GET /api/movements/{movement}
-     */
-    public function show(InventoryMovement $movement): MovementResource
+    public function show(int $movement): JsonResponse
     {
-        $movement->load([
-            'user',
-            'branch',
-            'sourceBranch',
-            'targetBranch',
-            'items.product',
-            'items.location',
-            'items.targetLocation',
-        ]);
+        $record = DB::table('movimientos_kardex')
+            ->join('productos', 'productos.id_producto', '=', 'movimientos_kardex.id_producto')
+            ->join('tipos_movimiento', 'tipos_movimiento.id_tipo_movimiento', '=', 'movimientos_kardex.id_tipo_movimiento')
+            ->where('id_movimiento_kardex', $movement)
+            ->select('movimientos_kardex.*', 'productos.codigo', 'productos.nombre', 'tipos_movimiento.nombre_tipo as type')
+            ->firstOrFail();
 
-        return new MovementResource($movement);
+        return response()->json(['data' => $record]);
     }
 
-    /**
-     * POST /api/movements/entry
-     */
     public function storeEntry(StoreEntryMovementRequest $request): JsonResponse
     {
-        $movement = $this->stockTransactionService->registerEntry(
-            $request->validated(),
-            (int) $request->user()->id
-        );
-
-        return (new MovementResource($movement))
-            ->response()
-            ->setStatusCode(201);
+        return response()->json([
+            'data' => $this->stockTransactionService->registerEntry($request->validated(), (int) $request->user()->id_usuario),
+        ], 201);
     }
 
-    /**
-     * POST /api/movements/exit
-     */
     public function storeExit(StoreExitMovementRequest $request): JsonResponse
     {
-        $movement = $this->stockTransactionService->registerExit(
-            $request->validated(),
-            (int) $request->user()->id
-        );
-
-        return (new MovementResource($movement))
-            ->response()
-            ->setStatusCode(201);
+        return response()->json([
+            'data' => $this->stockTransactionService->registerExit($request->validated(), (int) $request->user()->id_usuario),
+        ], 201);
     }
 
-    /**
-     * POST /api/movements/transfer
-     */
     public function storeTransfer(StoreTransferMovementRequest $request): JsonResponse
     {
-        $movement = $this->stockTransactionService->registerTransfer(
-            $request->validated(),
-            (int) $request->user()->id
-        );
-
-        return (new MovementResource($movement))
-            ->response()
-            ->setStatusCode(201);
+        return response()->json([
+            'data' => $this->stockTransactionService->registerTransfer($request->validated(), (int) $request->user()->id_usuario),
+        ], 201);
     }
 }

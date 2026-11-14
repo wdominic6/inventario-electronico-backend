@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\StoreCategoryRequest;
 use App\Http\Requests\Catalog\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
-use App\Models\Category;
+use App\Models\Categoria;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,18 +24,19 @@ class CategoryController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Category::query();
+        $query = Categoria::query();
 
         if ($request->filled('q')) {
             $search = $request->string('q')->toString();
             $query->where(function ($subQuery) use ($search): void {
-                $subQuery->where('name', 'like', "%{$search}%")
-                    ->orWhere('code_prefix', 'like', "%{$search}%");
+                $subQuery->where('nombre_categoria', 'like', "%{$search}%")
+                    ->orWhere('prefijo_codigo', 'like', "%{$search}%")
+                    ->orWhere('descripcion', 'like', "%{$search}%");
             });
         }
 
         return CategoryResource::collection(
-            $query->orderBy('name')->get()
+            $query->orderBy('nombre_categoria')->get()
         );
     }
 
@@ -44,13 +45,18 @@ class CategoryController extends Controller
      */
     public function store(StoreCategoryRequest $request): JsonResponse
     {
-        $category = Category::query()->create($request->validated());
+        $data = $request->validated();
+        $category = Categoria::query()->create([
+            'nombre_categoria' => $data['name'],
+            'prefijo_codigo' => $data['code_prefix'],
+            'descripcion' => $data['description'] ?? null,
+        ]);
 
         $this->auditService->log(
             action: 'category.created',
             entityType: 'Category',
-            entityId: $category->id,
-            description: 'Creación de categoría '.$category->name,
+            entityId: $category->id_categoria,
+            description: 'Creación de categoría '.$category->nombre_categoria,
             details: $request->validated(),
             request: $request
         );
@@ -63,15 +69,20 @@ class CategoryController extends Controller
     /**
      * PUT /api/categories/{category}
      */
-    public function update(UpdateCategoryRequest $request, Category $category): CategoryResource
+    public function update(UpdateCategoryRequest $request, Categoria $category): CategoryResource
     {
-        $category->update($request->validated());
+        $data = $request->validated();
+        $category->update([
+            'nombre_categoria' => $data['name'] ?? $category->nombre_categoria,
+            'prefijo_codigo' => $data['code_prefix'] ?? $category->prefijo_codigo,
+            'descripcion' => $data['description'] ?? $category->descripcion,
+        ]);
 
         $this->auditService->log(
             action: 'category.updated',
             entityType: 'Category',
-            entityId: $category->id,
-            description: 'Actualización de categoría '.$category->name,
+            entityId: $category->id_categoria,
+            description: 'Actualización de categoría '.$category->nombre_categoria,
             details: $request->validated(),
             request: $request
         );
@@ -82,16 +93,16 @@ class CategoryController extends Controller
     /**
      * DELETE /api/categories/{category}
      */
-    public function destroy(Request $request, Category $category): Response|JsonResponse
+    public function destroy(Request $request, Categoria $category): Response|JsonResponse
     {
-        if (method_exists($category, 'products') && $category->products()->exists()) {
+        if ($category->productos()->exists()) {
             return response()->json([
                 'message' => 'No se puede eliminar la categoría porque tiene componentes electrónicos asociados.',
             ], 409);
         }
 
-        $categoryId = $category->id;
-        $categoryName = $category->name;
+        $categoryId = $category->id_categoria;
+        $categoryName = $category->nombre_categoria;
         $category->delete();
 
         $this->auditService->log(

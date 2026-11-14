@@ -16,7 +16,7 @@ class Usuario extends Authenticatable
     protected $primaryKey = 'id_usuario';
 
     protected $fillable = [
-        'id_rol', 'nombre', 'apellido', 'email', 'password_hash', 'estado', 'ultimo_acceso',
+        'id_rol', 'id_sucursal', 'nombre', 'apellido', 'email', 'password_hash', 'estado', 'ultimo_acceso',
     ];
 
     protected $hidden = ['password_hash'];
@@ -40,6 +40,11 @@ class Usuario extends Authenticatable
     public function rol(): BelongsTo
     {
         return $this->belongsTo(Rol::class, 'id_rol', 'id_rol');
+    }
+
+    public function sucursal(): BelongsTo
+    {
+        return $this->belongsTo(Sucursal::class, 'id_sucursal', 'id_sucursal');
     }
 
     public function nombreRol(): ?string

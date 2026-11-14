@@ -22,6 +22,8 @@ class StockController extends Controller
         $query = Producto::query()
             ->with([
                 'categoria',
+                'fabricante',
+                'unidad',
                 'stocks.sucursal',
                 'stocks.ubicacion',
             ])
@@ -32,7 +34,9 @@ class StockController extends Controller
             $query->where(function (Builder $products) use ($search): void {
                 $products
                     ->where('codigo', 'like', "%{$search}%")
+                    ->orWhere('codigo_barras', 'like', "%{$search}%")
                     ->orWhere('nombre', 'like', "%{$search}%")
+                    ->orWhere('marca', 'like', "%{$search}%")
                     ->orWhere('modelo', 'like', "%{$search}%")
                     ->orWhereRaw('CAST(especificaciones_extra AS CHAR) LIKE ?', ["%{$search}%"])
                     ->orWhereHas('atributos', function (Builder $attributes) use ($search): void {
@@ -43,27 +47,25 @@ class StockController extends Controller
             });
         }
 
-        if ($request->filled('categoria')) {
-            $categoria = $request->string('categoria')->toString();
-            $query->whereHas('categoria', function (Builder $categories) use ($categoria): void {
-                $categories->where('nombre_categoria', 'like', "%{$categoria}%");
-                if (ctype_digit($categoria)) {
-                    $categories->orWhere('id_categoria', (int) $categoria);
-                }
+        if ($request->filled('category_id')) {
+            $query->where('id_categoria', $request->integer('category_id'));
+        }
+
+        if ($request->filled('branch_id')) {
+            $query->whereHas('stocks', function (Builder $stocks) use ($request): void {
+                $stocks->where('id_sucursal', $request->integer('branch_id'));
             });
         }
 
-        if ($request->filled('sucursal')) {
-            $sucursal = $request->string('sucursal')->toString();
-            $query->whereHas('stocks.sucursal', function (Builder $branches) use ($sucursal): void {
-                $branches->where('nombre_sucursal', 'like', "%{$sucursal}%");
-                if (ctype_digit($sucursal)) {
-                    $branches->orWhere('id_sucursal', (int) $sucursal);
-                }
-            });
+        if ($request->filled('package_type')) {
+            $query->where('encapsulado', 'like', '%'.$request->string('package_type')->toString().'%');
         }
 
-        if ($request->boolean('solo_disponibles')) {
+        if ($request->filled('voltage')) {
+            $query->where('voltaje_operacion', 'like', '%'.$request->string('voltage')->toString().'%');
+        }
+
+        if ($request->boolean('only_available')) {
             $query->whereHas('stocks', function (Builder $stocks): void {
                 $stocks->where('cantidad', '>', 0);
             });

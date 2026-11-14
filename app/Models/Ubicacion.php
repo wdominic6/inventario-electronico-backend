@@ -14,8 +14,7 @@ class Ubicacion extends Model
     protected $table = 'ubicaciones';
     protected $primaryKey = 'id_ubicacion';
     public $timestamps = false;
-
-    protected $fillable = ['id_sucursal', 'estante', 'nivel', 'casillero', 'estado', 'descripcion'];
+    protected $fillable = ['id_sucursal', 'codigo', 'estante', 'nivel', 'casillero', 'estado', 'descripcion'];
 
     public function sucursal(): BelongsTo
     {

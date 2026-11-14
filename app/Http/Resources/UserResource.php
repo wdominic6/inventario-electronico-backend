@@ -16,10 +16,17 @@ class UserResource extends JsonResource
             'id' => $this->id_usuario,
             'name' => trim($this->nombre.' '.$this->apellido),
             'email' => $this->email,
-            'role' => $this->nombreRol(),
-            'estado' => $this->estado,
-            'created_at' => $this->created_at?->toISOString(),
-            'updated_at' => $this->updated_at?->toISOString(),
+            'role' => match ($this->nombreRol()) {
+                'Administrador' => 'admin',
+                'Almacén' => 'almacen',
+                'Ventas' => 'ventas',
+                default => $this->nombreRol(),
+            },
+            'is_active' => $this->estado === 'activo',
+            'branch_id' => $this->id_sucursal,
+            'branch_name' => $this->sucursal?->nombre_sucursal,
+            'branch' => new BranchResource($this->whenLoaded('sucursal')),
+            'last_access' => $this->ultimo_acceso?->toISOString(),
         ];
     }
 }

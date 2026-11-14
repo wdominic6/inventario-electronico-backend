@@ -3,8 +3,6 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
-
 class StoreUserRequest extends FormRequest
 {
     public function authorize(): bool
@@ -18,11 +16,11 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:150'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'string', 'email', 'max:150', 'unique:usuarios,email'],
             'password' => ['required', 'string', 'min:8', 'max:100'],
-            'role' => ['required', 'string', Rule::in(['admin', 'almacen', 'ventas'])],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'role' => ['required', 'string', 'in:admin,almacen,ventas'],
+            'branch_id' => ['required', 'integer', 'exists:sucursales,id_sucursal'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
@@ -41,6 +39,7 @@ class StoreUserRequest extends FormRequest
             'password.min' => 'La contraseña debe contener como mínimo :min caracteres.',
             'role.required' => 'El rol del usuario es obligatorio.',
             'role.in' => 'El rol seleccionado no es válido. Valores permitidos: admin, almacen, ventas.',
+            'branch_id.required' => 'La sucursal del usuario es obligatoria.',
             'branch_id.exists' => 'La sucursal seleccionada no existe.',
         ];
     }

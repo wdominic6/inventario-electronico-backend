@@ -17,38 +17,32 @@ class UpdateProductRequest extends FormRequest
      */
     public function rules(): array
     {
-        $productId = $this->route('product')?->id ?? $this->route('product');
+        $productId = $this->route('product')?->id_producto ?? $this->route('product');
 
         return [
             'sku' => [
                 'sometimes',
                 'required',
                 'string',
-                'max:60',
-                Rule::unique('products', 'sku')->ignore($productId),
+                'max:50',
+                Rule::unique('productos', 'codigo')->ignore($productId, 'id_producto'),
             ],
             'barcode' => [
-                'nullable',
+                'sometimes',
+                'required',
                 'string',
                 'max:100',
-                Rule::unique('products', 'barcode')->ignore($productId),
+                Rule::unique('productos', 'codigo_barras')->ignore($productId, 'id_producto'),
             ],
-            'name' => ['sometimes', 'required', 'string', 'max:200'],
-            'category_id' => ['sometimes', 'required', 'integer', 'exists:categories,id'],
-            'brand' => ['nullable', 'string', 'max:100'],
+            'name' => ['sometimes', 'required', 'string', 'max:150'],
+            'category_id' => ['sometimes', 'required', 'integer', 'exists:categorias,id_categoria'],
+            'brand' => ['sometimes', 'required', 'string', 'max:100'],
             'model' => ['nullable', 'string', 'max:100'],
-            'unit' => ['sometimes', 'required', 'string', 'max:30'],
+            'unit' => ['sometimes', 'required', 'string', 'max:50'],
             'min_stock' => ['sometimes', 'required', 'integer', 'min:0'],
             'unit_cost' => ['sometimes', 'required', 'numeric', 'min:0'],
             'unit_price' => ['sometimes', 'required', 'numeric', 'min:0'],
-            'specs' => ['nullable', 'array'],
-            'specs.voltage' => ['nullable', 'string', 'max:50'],
-            'specs.current' => ['nullable', 'string', 'max:50'],
-            'specs.resistance' => ['nullable', 'string', 'max:50'],
-            'specs.tolerance' => ['nullable', 'string', 'max:50'],
-            'specs.package_type' => ['nullable', 'string', 'max:50'],
-            'specs.pins' => ['nullable', 'integer', 'min:0'],
-            'specs.extra' => ['nullable'],
+            'specs' => ['sometimes', 'required', 'array'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
@@ -61,6 +55,7 @@ class UpdateProductRequest extends FormRequest
         return [
             'sku.required' => 'El código SKU no puede estar vacío.',
             'sku.unique' => 'Este código SKU ya pertenece a otro componente.',
+            'barcode.required' => 'El código de barras no puede estar vacío.',
             'barcode.unique' => 'Este código de barras ya pertenece a otro componente.',
             'name.required' => 'El nombre del componente no puede estar vacío.',
             'category_id.exists' => 'La categoría seleccionada no existe.',

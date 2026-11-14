@@ -22,7 +22,8 @@ return new class extends Migration
             $table->string('tolerancia', 50)->nullable();
             $table->json('especificaciones_extra')->nullable();
             $table->string('estado', 20)->default('activo');
-            $table->timestamps();
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
 
             // Índices de búsqueda
             $table->index('codigo');

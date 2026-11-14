@@ -18,11 +18,17 @@ class Producto extends Model
     protected $fillable = [
         'id_categoria', 'id_fabricante', 'id_unidad', 'codigo', 'nombre', 'modelo',
         'encapsulado', 'voltaje_operacion', 'tolerancia', 'especificaciones_extra', 'estado',
+        'codigo_barras', 'marca', 'stock_minimo', 'costo_unitario', 'precio_unitario',
     ];
 
     protected function casts(): array
     {
-        return ['especificaciones_extra' => 'array'];
+        return [
+            'especificaciones_extra' => 'array',
+            'stock_minimo' => 'integer',
+            'costo_unitario' => 'decimal:2',
+            'precio_unitario' => 'decimal:2',
+        ];
     }
 
     public function categoria(): BelongsTo

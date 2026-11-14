@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
-use App\Models\User;
+use App\Models\Usuario;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,34 +25,31 @@ class AuthController extends Controller
     {
         $credentials = $request->validated();
 
-        $user = User::query()
+        $user = Usuario::query()
+            ->with('rol')
             ->where('email', $credentials['email'])
             ->first();
 
-        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password_hash)) {
             return response()->json([
                 'message' => 'Las credenciales proporcionadas son incorrectas.',
             ], 401);
         }
 
-        if (isset($user->is_active) && ! $user->is_active) {
+        if ($user->estado !== 'activo') {
             return response()->json([
                 'message' => 'Esta cuenta de usuario se encuentra desactivada.',
             ], 403);
-        }
-
-        if (method_exists($user, 'branch')) {
-            $user->load('branch');
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $this->auditService->log(
             action: 'auth.login',
-            entityType: 'User',
-            entityId: $user->id,
+            entityType: 'Usuario',
+            entityId: $user->id_usuario,
             description: 'Inicio de sesión exitoso de '.$user->email,
-            userId: $user->id,
+            userId: $user->id_usuario,
             request: $request
         );
 
@@ -71,13 +68,13 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user) {
+        if ($user instanceof Usuario) {
             $this->auditService->log(
                 action: 'auth.logout',
-                entityType: 'User',
-                entityId: $user->id,
+                entityType: 'Usuario',
+                entityId: $user->id_usuario,
                 description: 'Cierre de sesión de '.$user->email,
-                userId: $user->id,
+                userId: $user->id_usuario,
                 request: $request
             );
 
@@ -93,10 +90,6 @@ class AuthController extends Controller
     public function me(Request $request): UserResource
     {
         $user = $request->user();
-
-        if ($user && method_exists($user, 'branch')) {
-            $user->load('branch');
-        }
 
         return new UserResource($user);
     }

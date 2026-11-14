@@ -14,8 +14,10 @@ use Illuminate\Support\Facades\Route;
 | - /api/reports/dashboard-summary, /api/reports/rotation, /api/reports/kardex/{product}
 */
 
-Route::middleware('auth:sanctum')
-    ->middleware(RoleMiddleware::class.':admin,ventas,almacen')
+Route::middleware([
+    'auth:sanctum',
+    RoleMiddleware::class.':admin,ventas,almacen',
+])
     ->group(function (): void {
         Route::get('/stock', [StockController::class, 'buscarStock']);
         Route::get('/stock/search', [StockController::class, 'buscarStock']);

@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Movement;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Validator;
 
 class StoreTransferMovementRequest extends FormRequest
 {
@@ -27,6 +29,65 @@ class StoreTransferMovementRequest extends FormRequest
             'items.*.target_location_id' => ['required', 'integer', 'exists:ubicaciones,id_ubicacion'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $sourceBranchId = (int) $this->input('source_branch_id');
+            $targetBranchId = (int) $this->input('target_branch_id');
+            $items = (array) $this->input('items', []);
+
+            $sourceLocationSet = array_flip(
+                DB::table('ubicaciones')
+                    ->where('id_sucursal', $sourceBranchId)
+                    ->pluck('id_ubicacion')
+                    ->map(static fn ($id): int => (int) $id)
+                    ->all()
+            );
+
+            $targetLocationSet = array_flip(
+                DB::table('ubicaciones')
+                    ->where('id_sucursal', $targetBranchId)
+                    ->pluck('id_ubicacion')
+                    ->map(static fn ($id): int => (int) $id)
+                    ->all()
+            );
+
+            $seenTriplets = [];
+            foreach ($items as $index => $item) {
+                $productId = (int) ($item['product_id'] ?? 0);
+                $sourceLocId = (int) ($item['source_location_id'] ?? 0);
+                $targetLocId = (int) ($item['target_location_id'] ?? 0);
+
+                if (! isset($sourceLocationSet[$sourceLocId])) {
+                    $validator->errors()->add(
+                        "items.{$index}.source_location_id",
+                        'La ubicación física de origen no pertenece a la sucursal de origen seleccionada.'
+                    );
+                }
+
+                if (! isset($targetLocationSet[$targetLocId])) {
+                    $validator->errors()->add(
+                        "items.{$index}.target_location_id",
+                        'La ubicación física de destino no pertenece a la sucursal de destino seleccionada.'
+                    );
+                }
+
+                $tripletKey = "{$productId}:{$sourceLocId}:{$targetLocId}";
+                if (isset($seenTriplets[$tripletKey])) {
+                    $validator->errors()->add(
+                        "items.{$index}.product_id",
+                        'No puede duplicar la misma combinación de producto, ubicación de origen y destino en un mismo traslado.'
+                    );
+                }
+                $seenTriplets[$tripletKey] = true;
+            }
+        });
     }
 
     /**

@@ -8,11 +8,11 @@ use App\Http\Requests\Auth\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\Rol;
 use App\Models\Usuario;
-use Illuminate\Support\Facades\Hash;
 use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {

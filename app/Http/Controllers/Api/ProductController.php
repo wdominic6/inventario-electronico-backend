@@ -10,10 +10,12 @@ use App\Models\Fabricante;
 use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Services\AuditService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -79,7 +81,7 @@ class ProductController extends Controller
             'id_fabricante' => $this->manufacturerId($data['brand']),
             'id_unidad' => $this->unitId($data['unit']),
             'codigo' => $data['sku'],
-            'codigo_barras' => $data['barcode'],
+            'codigo_barras' => $data['barcode'] ?? null,
             'nombre' => $data['name'],
             'marca' => $data['brand'],
             'stock_minimo' => $data['min_stock'],
@@ -92,6 +94,7 @@ class ProductController extends Controller
             'especificaciones_extra' => $specs,
             'estado' => ($data['is_active'] ?? true) ? 'activo' : 'inactivo',
         ]);
+        $this->syncMinStock($product->id_producto, (int) $data['min_stock']);
         $product->load(['categoria', 'fabricante', 'unidad']);
 
         $this->auditService->log(
@@ -137,6 +140,9 @@ class ProductController extends Controller
             'especificaciones_extra' => $specs,
             'estado' => array_key_exists('is_active', $data) ? ($data['is_active'] ? 'activo' : 'inactivo') : null,
         ], static fn ($value): bool => $value !== null));
+        if (array_key_exists('min_stock', $data)) {
+            $this->syncMinStock($product->id_producto, (int) $data['min_stock']);
+        }
         $product->load(['categoria', 'fabricante', 'unidad']);
 
         $this->auditService->log(
@@ -190,16 +196,37 @@ class ProductController extends Controller
 
         $productId = $product->id_producto;
         $productSku = $product->codigo;
-        $product->delete();
+
+        try {
+            $product->stocks()->where('cantidad', '<=', 0)->delete();
+            $product->delete();
+            $description = 'Eliminación de componente electrónico SKU '.$productSku;
+        } catch (QueryException) {
+            $product->update(['estado' => 'inactivo']);
+            $description = 'Baja lógica de componente electrónico SKU '.$productSku.' (posee historial transaccional)';
+        }
 
         $this->auditService->log(
             action: 'product.deleted',
             entityType: 'Product',
             entityId: $productId,
-            description: 'Eliminación de componente electrónico SKU '.$productSku,
+            description: $description,
             request: $request
         );
 
         return response()->noContent();
+    }
+
+    private function syncMinStock(int $productId, int $minStock): void
+    {
+        $branchIds = DB::table('sucursales')->where('estado', 'activa')->pluck('id_sucursal');
+        $now = now();
+
+        foreach ($branchIds as $branchId) {
+            DB::table('stock_minimos')->updateOrInsert(
+                ['id_producto' => $productId, 'id_sucursal' => $branchId],
+                ['stock_minimo' => $minStock, 'updated_at' => $now, 'created_at' => $now]
+            );
+        }
     }
 }

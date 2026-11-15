@@ -42,6 +42,8 @@ class AuthController extends Controller
             ], 403);
         }
 
+        $user->forceFill(['ultimo_acceso' => now()])->save();
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $this->auditService->log(

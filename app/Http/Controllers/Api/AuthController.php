@@ -89,9 +89,16 @@ class AuthController extends Controller
     /**
      * GET /api/auth/me
      */
-    public function me(Request $request): UserResource
+    public function me(Request $request): UserResource|JsonResponse
     {
         $user = $request->user();
+
+        if (! $user instanceof Usuario) {
+            return response()->json([
+                'message' => 'No autenticado.',
+            ], 401);
+        }
+
         $user->load(['rol', 'sucursal']);
 
         return new UserResource($user);

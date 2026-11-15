@@ -17,14 +17,14 @@ class StoreTransferMovementRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'source_branch_id' => ['required', 'integer', 'exists:branches,id', 'different:target_branch_id'],
-            'target_branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'source_branch_id' => ['required', 'integer', 'exists:sucursales,id_sucursal', 'different:target_branch_id'],
+            'target_branch_id' => ['required', 'integer', 'exists:sucursales,id_sucursal'],
             'reference_code' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'items.*.source_location_id' => ['required', 'integer', 'exists:locations,id'],
-            'items.*.target_location_id' => ['required', 'integer', 'exists:locations,id'],
+            'items.*.product_id' => ['required', 'integer', 'exists:productos,id_producto'],
+            'items.*.source_location_id' => ['required', 'integer', 'exists:ubicaciones,id_ubicacion'],
+            'items.*.target_location_id' => ['required', 'integer', 'exists:ubicaciones,id_ubicacion'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
         ];
     }

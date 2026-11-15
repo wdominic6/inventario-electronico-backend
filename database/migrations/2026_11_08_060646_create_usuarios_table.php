@@ -18,7 +18,8 @@ return new class extends Migration
             $table->string('password_hash', 255);
             $table->string('estado', 20)->default('activo');
             $table->timestamp('ultimo_acceso')->nullable();
-            $table->timestamps();
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
         });
 
         DB::statement("ALTER TABLE usuarios ADD CONSTRAINT chk_usuario_estado CHECK (estado IN ('activo', 'inactivo', 'bloqueado'))");

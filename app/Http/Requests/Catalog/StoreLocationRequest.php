@@ -18,19 +18,12 @@ class StoreLocationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'code' => [
-                'required',
-                'string',
-                'max:50',
-                Rule::unique('locations', 'code')->where(
-                    fn ($query) => $query->where('branch_id', $this->input('branch_id'))
-                ),
-            ],
+            'branch_id' => ['required', 'integer', 'exists:sucursales,id_sucursal'],
+            'code' => ['required', 'string', 'max:50', 'unique:ubicaciones,codigo'],
             'shelf' => ['required', 'string', 'max:50'],
             'level' => ['required', 'string', 'max:50'],
             'bin' => ['required', 'string', 'max:50'],
-            'description' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
         ];
     }
 

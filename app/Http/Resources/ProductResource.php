@@ -13,58 +13,47 @@ class ProductResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
-            'sku' => $this->sku,
-            'barcode' => $this->barcode,
-            'name' => $this->name,
-            'category_id' => $this->category_id,
-            'category' => new CategoryResource($this->whenLoaded('category')),
-            'brand' => $this->brand,
-            'model' => $this->model,
-            'unit' => $this->unit,
-            'min_stock' => (int) $this->min_stock,
-            'unit_cost' => (float) $this->unit_cost,
-            'unit_price' => (float) $this->unit_price,
-            'specs' => $this->specs ?? [
-                'voltage' => null,
-                'current' => null,
-                'resistance' => null,
-                'tolerance' => null,
-                'package_type' => null,
-                'pins' => null,
-                'extra' => null,
-            ],
-            'is_active' => (bool) ($this->is_active ?? true),
+            'id' => $this->id_producto,
+            'sku' => $this->codigo,
+            'barcode' => $this->codigo_barras,
+            'name' => $this->nombre,
+            'category_id' => $this->id_categoria,
+            'category' => new CategoryResource($this->whenLoaded('categoria')),
+            'brand' => $this->marca ?? $this->fabricante?->nombre,
+            'model' => $this->modelo,
+            'unit' => $this->unidad?->nombre ?? $this->unidad?->abreviatura,
+            'min_stock' => (int) $this->stock_minimo,
+            'unit_cost' => $this->costo_unitario !== null ? (float) $this->costo_unitario : null,
+            'unit_price' => $this->precio_unitario !== null ? (float) $this->precio_unitario : null,
+            'specs' => $this->especificaciones_extra,
+            'is_active' => $this->estado === 'activo',
             'total_stock' => $this->when(
-                isset($this->stocks_sum_quantity) || $this->relationLoaded('stocks'),
-                fn () => isset($this->stocks_sum_quantity)
-                    ? (int) $this->stocks_sum_quantity
-                    : (int) $this->stocks->sum('quantity')
+                isset($this->stocks_sum_cantidad) || $this->relationLoaded('stocks'),
+                fn () => isset($this->stocks_sum_cantidad)
+                    ? (int) $this->stocks_sum_cantidad
+                    : (int) $this->stocks->sum('cantidad')
             ),
             'stocks_by_branch' => $this->whenLoaded('stocks', function () {
                 return $this->stocks
-                    ->groupBy('branch_id')
+                    ->groupBy('id_sucursal')
                     ->map(function ($branchStocks) {
                         $first = $branchStocks->first();
 
                         return [
-                            'branch_id' => $first->branch_id,
-                            'branch_name' => $first->relationLoaded('branch') ? $first->branch?->name : null,
-                            'total_quantity' => (int) $branchStocks->sum('quantity'),
+                            'branch_id' => $first->id_sucursal,
+                            'branch_name' => $first->relationLoaded('sucursal') ? $first->sucursal?->nombre_sucursal : null,
+                            'total_quantity' => (int) $branchStocks->sum('cantidad'),
                             'locations' => $branchStocks->map(fn ($stock) => [
-                                'location_id' => $stock->location_id,
-                                'code' => $stock->relationLoaded('location') ? $stock->location?->code : null,
-                                'shelf' => $stock->relationLoaded('location') ? $stock->location?->shelf : null,
-                                'level' => $stock->relationLoaded('location') ? $stock->location?->level : null,
-                                'bin' => $stock->relationLoaded('location') ? $stock->location?->bin : null,
-                                'quantity' => (int) $stock->quantity,
+                                'location_id' => $stock->id_ubicacion,
+                                'shelf' => $stock->relationLoaded('ubicacion') ? $stock->ubicacion?->estante : null,
+                                'level' => $stock->relationLoaded('ubicacion') ? $stock->ubicacion?->nivel : null,
+                                'bin' => $stock->relationLoaded('ubicacion') ? $stock->ubicacion?->casillero : null,
+                                'quantity' => (int) $stock->cantidad,
                             ])->values(),
                         ];
                     })
                     ->values();
             }),
-            'created_at' => $this->created_at?->toISOString(),
-            'updated_at' => $this->updated_at?->toISOString(),
         ];
     }
 }

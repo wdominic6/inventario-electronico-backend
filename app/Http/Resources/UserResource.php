@@ -13,16 +13,20 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
-            'name' => $this->name,
+            'id' => $this->id_usuario,
+            'name' => trim($this->nombre.' '.$this->apellido),
             'email' => $this->email,
-            'role' => $this->role ?? 'almacen',
-            'branch_id' => $this->branch_id,
-            'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
-            'branch' => new BranchResource($this->whenLoaded('branch')),
-            'is_active' => (bool) ($this->is_active ?? true),
-            'created_at' => $this->created_at?->toISOString(),
-            'updated_at' => $this->updated_at?->toISOString(),
+            'role' => match ($this->nombreRol()) {
+                'Administrador' => 'admin',
+                'Almacén' => 'almacen',
+                'Ventas' => 'ventas',
+                default => $this->nombreRol(),
+            },
+            'is_active' => $this->estado === 'activo',
+            'branch_id' => $this->id_sucursal,
+            'branch_name' => $this->sucursal?->nombre_sucursal,
+            'branch' => new BranchResource($this->whenLoaded('sucursal')),
+            'last_access' => $this->ultimo_acceso?->toISOString(),
         ];
     }
 }

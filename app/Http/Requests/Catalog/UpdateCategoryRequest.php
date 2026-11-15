@@ -17,24 +17,18 @@ class UpdateCategoryRequest extends FormRequest
      */
     public function rules(): array
     {
-        $categoryId = $this->route('category')?->id ?? $this->route('category');
+        $categoryId = $this->route('category')?->id_categoria ?? $this->route('category');
 
         return [
             'name' => [
                 'sometimes',
                 'required',
                 'string',
-                'max:120',
-                Rule::unique('categories', 'name')->ignore($categoryId),
+                'max:100',
+                Rule::unique('categorias', 'nombre_categoria')->ignore($categoryId, 'id_categoria'),
             ],
-            'code_prefix' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:20',
-                Rule::unique('categories', 'code_prefix')->ignore($categoryId),
-            ],
-            'description' => ['nullable', 'string', 'max:500'],
+            'code_prefix' => ['sometimes', 'required', 'string', 'max:30', Rule::unique('categorias', 'prefijo_codigo')->ignore($categoryId, 'id_categoria')],
+            'description' => ['nullable', 'string'],
         ];
     }
 
@@ -46,8 +40,6 @@ class UpdateCategoryRequest extends FormRequest
         return [
             'name.required' => 'El nombre de la categoría no puede estar vacío.',
             'name.unique' => 'Ya existe otra categoría con este nombre.',
-            'code_prefix.required' => 'El prefijo de código no puede estar vacío.',
-            'code_prefix.unique' => 'Ya existe otra categoría con este prefijo de código.',
         ];
     }
 }

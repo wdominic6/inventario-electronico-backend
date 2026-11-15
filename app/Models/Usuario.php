@@ -6,16 +6,17 @@ use Database\Factories\UsuarioFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Laravel\Sanctum\HasApiTokens;
 
 class Usuario extends Authenticatable
 {
-    use HasFactory;
+    use HasApiTokens, HasFactory;
 
     protected $table = 'usuarios';
     protected $primaryKey = 'id_usuario';
 
     protected $fillable = [
-        'id_rol', 'nombre', 'apellido', 'email', 'password_hash', 'estado', 'ultimo_acceso',
+        'id_rol', 'id_sucursal', 'nombre', 'apellido', 'email', 'password_hash', 'estado', 'ultimo_acceso',
     ];
 
     protected $hidden = ['password_hash'];
@@ -39,6 +40,16 @@ class Usuario extends Authenticatable
     public function rol(): BelongsTo
     {
         return $this->belongsTo(Rol::class, 'id_rol', 'id_rol');
+    }
+
+    public function sucursal(): BelongsTo
+    {
+        return $this->belongsTo(Sucursal::class, 'id_sucursal', 'id_sucursal');
+    }
+
+    public function nombreRol(): ?string
+    {
+        return $this->rol?->nombre_rol;
     }
 
     protected static function newFactory(): UsuarioFactory

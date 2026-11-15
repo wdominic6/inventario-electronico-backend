@@ -18,13 +18,13 @@ class StoreExitMovementRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => ['required', 'integer', 'exists:sucursales,id_sucursal'],
             'reference_code' => ['nullable', 'string', 'max:100'],
             'reason' => ['required', 'string', Rule::in(['sale', 'damaged', 'internal_use'])],
             'notes' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'items.*.location_id' => ['required', 'integer', 'exists:locations,id'],
+            'items.*.product_id' => ['required', 'integer', 'exists:productos,id_producto'],
+            'items.*.location_id' => ['required', 'integer', 'exists:ubicaciones,id_ubicacion'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
         ];
     }

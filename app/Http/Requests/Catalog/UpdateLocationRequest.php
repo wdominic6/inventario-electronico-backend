@@ -18,6 +18,7 @@ class UpdateLocationRequest extends FormRequest
     public function rules(): array
     {
         $location = $this->route('location');
+
         return [
             'branch_id' => ['sometimes', 'required', 'integer', 'exists:sucursales,id_sucursal'],
             'code' => ['sometimes', 'required', 'string', 'max:50', Rule::unique('ubicaciones', 'codigo')->ignore($this->route('location')?->id_ubicacion ?? $this->route('location'), 'id_ubicacion')],

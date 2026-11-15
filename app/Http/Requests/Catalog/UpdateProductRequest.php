@@ -29,7 +29,7 @@ class UpdateProductRequest extends FormRequest
             ],
             'barcode' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'string',
                 'max:100',
                 Rule::unique('productos', 'codigo_barras')->ignore($productId, 'id_producto'),

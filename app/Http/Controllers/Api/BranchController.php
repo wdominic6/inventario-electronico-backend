@@ -8,6 +8,7 @@ use App\Http\Requests\Catalog\UpdateBranchRequest;
 use App\Http\Resources\BranchResource;
 use App\Models\Sucursal;
 use App\Services\AuditService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -116,7 +117,13 @@ class BranchController extends Controller
 
         $branchId = $branch->id_sucursal;
         $branchName = $branch->nombre_sucursal;
-        $branch->delete();
+
+        try {
+            $branch->stocks()->where('cantidad', '<=', 0)->delete();
+            $branch->delete();
+        } catch (QueryException) {
+            $branch->update(['estado' => 'inactiva']);
+        }
 
         $this->auditService->log(
             action: 'branch.deleted',

@@ -18,7 +18,7 @@ class StoreProductRequest extends FormRequest
     {
         return [
             'sku' => ['required', 'string', 'max:50', 'unique:productos,codigo'],
-            'barcode' => ['required', 'string', 'max:100', 'unique:productos,codigo_barras'],
+            'barcode' => ['nullable', 'string', 'max:100', 'unique:productos,codigo_barras'],
             'name' => ['required', 'string', 'max:150'],
             'category_id' => ['required', 'integer', 'exists:categorias,id_categoria'],
             'brand' => ['required', 'string', 'max:100'],

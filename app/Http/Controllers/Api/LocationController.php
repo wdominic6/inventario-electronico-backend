@@ -8,6 +8,7 @@ use App\Http\Requests\Catalog\UpdateLocationRequest;
 use App\Http\Resources\LocationResource;
 use App\Models\Ubicacion;
 use App\Services\AuditService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -116,13 +117,20 @@ class LocationController extends Controller
         }
 
         $locationId = $location->id_ubicacion;
-        $location->delete();
+        $locationCode = $location->codigo;
+
+        try {
+            $location->stocks()->where('cantidad', '<=', 0)->delete();
+            $location->delete();
+        } catch (QueryException) {
+            $location->update(['estado' => 'inactiva']);
+        }
 
         $this->auditService->log(
             action: 'location.deleted',
             entityType: 'Location',
             entityId: $locationId,
-            description: 'Eliminación de ubicación física '.$location->codigo,
+            description: 'Eliminación de ubicación física '.$locationCode,
             request: $request
         );
 

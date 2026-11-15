@@ -12,50 +12,56 @@ class MovementResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $normalizedType = match ($this->nombre_tipo ?? null) {
+            'Entrada Compra', 'Ajuste Positivo' => 'entry',
+            'Salida Venta', 'Ajuste Negativo' => 'exit',
+            'Traslado Saliente', 'Traslado Entrante' => 'transfer',
+            default => $this->nombre_tipo,
+        };
+
         return [
-            'id' => $this->id,
-            'type' => $this->type,
-            'branch_id' => $this->branch_id,
-            'source_branch_id' => $this->source_branch_id,
-            'target_branch_id' => $this->target_branch_id,
-            'user_id' => $this->user_id,
-            'reference_code' => $this->reference_code,
-            'supplier_name' => $this->supplier_name,
-            'reason' => $this->reason,
-            'notes' => $this->notes,
-            'user' => new UserResource($this->whenLoaded('user')),
-            'branch' => new BranchResource($this->whenLoaded('branch')),
-            'source_branch' => new BranchResource($this->whenLoaded('sourceBranch')),
-            'target_branch' => new BranchResource($this->whenLoaded('targetBranch')),
-            'items' => $this->whenLoaded('items', function () {
-                return $this->items->map(fn ($item) => [
-                    'id' => $item->id,
-                    'product_id' => $item->product_id,
-                    'product' => $item->relationLoaded('product') && $item->product
-                        ? [
-                            'id' => $item->product->id,
-                            'sku' => $item->product->sku,
-                            'barcode' => $item->product->barcode,
-                            'name' => $item->product->name,
-                            'unit' => $item->product->unit,
-                        ]
-                        : null,
-                    'location_id' => $item->location_id,
-                    'location' => $item->relationLoaded('location') && $item->location
-                        ? new LocationResource($item->location)
-                        : null,
-                    'target_location_id' => $item->target_location_id,
-                    'target_location' => $item->relationLoaded('targetLocation') && $item->targetLocation
-                        ? new LocationResource($item->targetLocation)
-                        : null,
-                    'quantity' => (int) $item->quantity,
-                    'unit_cost' => $item->unit_cost !== null ? (float) $item->unit_cost : null,
-                    'previous_stock' => (int) $item->previous_stock,
-                    'new_stock' => (int) $item->new_stock,
-                ]);
-            }),
-            'created_at' => $this->created_at?->toISOString(),
-            'updated_at' => $this->updated_at?->toISOString(),
+            'id' => (int) $this->id_movimiento_kardex,
+            'type' => $normalizedType,
+            'movement_type_name' => $this->nombre_tipo,
+            'factor' => isset($this->factor) ? (int) $this->factor : null,
+            'product_id' => (int) $this->id_producto,
+            'codigo' => $this->codigo,
+            'nombre' => $this->nombre,
+            'product' => [
+                'id' => (int) $this->id_producto,
+                'sku' => $this->codigo,
+                'name' => $this->nombre,
+            ],
+            'branch_id' => (int) $this->id_sucursal,
+            'branch' => [
+                'id' => (int) $this->id_sucursal,
+                'name' => $this->nombre_sucursal ?? null,
+            ],
+            'location_id' => (int) $this->id_ubicacion,
+            'location' => [
+                'id' => (int) $this->id_ubicacion,
+                'shelf' => $this->estante ?? null,
+                'level' => $this->nivel ?? null,
+                'bin' => $this->casillero ?? null,
+            ],
+            'user_id' => (int) $this->id_usuario,
+            'user' => [
+                'id' => (int) $this->id_usuario,
+                'name' => trim(($this->nombre_usuario ?? '').' '.($this->apellido_usuario ?? '')),
+                'email' => $this->email_usuario ?? null,
+            ],
+            'quantity' => (int) $this->cantidad,
+            'cantidad' => (int) $this->cantidad,
+            'previous_stock' => (int) $this->stock_anterior,
+            'new_stock' => (int) $this->stock_resultante,
+            'stock_anterior' => (int) $this->stock_anterior,
+            'stock_resultante' => (int) $this->stock_resultante,
+            'entry_id' => $this->id_entrada !== null ? (int) $this->id_entrada : null,
+            'exit_id' => $this->id_salida !== null ? (int) $this->id_salida : null,
+            'transfer_id' => $this->id_transferencia !== null ? (int) $this->id_transferencia : null,
+            'notes' => $this->observacion ?? null,
+            'created_at' => $this->fecha_hora,
+            'fecha_hora' => $this->fecha_hora,
         ];
     }
 }

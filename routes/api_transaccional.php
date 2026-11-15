@@ -34,6 +34,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::middleware(RoleMiddleware::class.':admin,almacen,ventas')->group(function (): void {
         Route::get('/branches', [BranchController::class, 'index']);
         Route::get('/categories', [CategoryController::class, 'index']);
+        Route::get('/categories/{category}', [CategoryController::class, 'show'])->whereNumber('category');
         Route::get('/locations', [LocationController::class, 'index']);
         Route::get('/products', [ProductController::class, 'index']);
         Route::get('/products/{product}', [ProductController::class, 'show'])->whereNumber('product');

@@ -41,6 +41,14 @@ class CategoryController extends Controller
     }
 
     /**
+     * GET /api/categories/{category}
+     */
+    public function show(Categoria $category): CategoryResource
+    {
+        return new CategoryResource($category);
+    }
+
+    /**
      * POST /api/categories
      */
     public function store(StoreCategoryRequest $request): JsonResponse

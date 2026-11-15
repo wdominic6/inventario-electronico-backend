@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\AlertController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Support\Facades\Route;
 
@@ -21,4 +23,22 @@ Route::middleware([
     ->group(function (): void {
         Route::get('/stock', [StockController::class, 'buscarStock']);
         Route::get('/stock/search', [StockController::class, 'buscarStock']);
+
+        Route::get('/alerts/low-stock', [AlertController::class, 'lowStock']);
     });
+
+Route::middleware([
+    'auth:sanctum',
+    RoleMiddleware::class.':admin',
+])->group(function (): void {
+    Route::get('/reports/dashboard-summary', [ReportController::class, 'dashboardSummary']);
+    Route::get('/reports/rotation', [ReportController::class, 'rotation']);
+});
+
+Route::middleware([
+    'auth:sanctum',
+    RoleMiddleware::class.':admin,almacen',
+])->group(function (): void {
+    Route::get('/reports/kardex/{product}', [ReportController::class, 'kardex'])
+        ->whereNumber('product');
+});

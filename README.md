@@ -65,6 +65,7 @@ docker compose exec db mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS proyect
 Ejecutar las migraciones y seeders únicamente sobre la base de pruebas:
 
 ```powershell
+docker compose exec backend php artisan key:generate --env=testing --force # solo la primera vez
 docker compose exec backend php artisan config:clear
 docker compose exec backend php artisan migrate:fresh --seed --env=testing
 docker compose exec backend php artisan test

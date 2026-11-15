@@ -39,6 +39,48 @@ demo son:
 | Ventas | `ventas@inventario.test` | `Ventas#2026` |
 | Almacén | `almacen@inventario.test` | `Almacen#2026` |
 
+## Base de datos de pruebas
+
+Las pruebas PHPUnit utilizan una base MySQL independiente llamada
+`proyecto_db_testing`. El archivo `backend/.env.testing` debe configurar la
+conexión con el servicio Docker:
+
+```env
+APP_ENV=testing
+DB_CONNECTION=mysql
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=proyecto_db_testing
+DB_USERNAME=equipo_user
+DB_PASSWORD=equipo_password
+```
+
+Crear la base de pruebas desde la carpeta `infra` (el comando solicitará la
+contraseña del usuario root):
+
+```powershell
+docker compose exec db mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS proyecto_db_testing CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON proyecto_db_testing.* TO 'equipo_user'@'%'; FLUSH PRIVILEGES;"
+```
+
+Ejecutar las migraciones y seeders únicamente sobre la base de pruebas:
+
+```powershell
+docker compose exec backend php artisan key:generate --env=testing --force # solo la primera vez
+docker compose exec backend php artisan config:clear
+docker compose exec backend php artisan migrate:fresh --seed --env=testing
+docker compose exec backend php artisan test
+```
+
+Para verificar la conexión activa:
+
+```powershell
+docker compose exec backend php artisan tinker --env=testing --execute="dump(config('app.env')); dump(config('database.connections.mysql.database')); dump(config('database.connections.mysql.host'));"
+```
+
+La salida esperada incluye `testing`, `proyecto_db_testing` y `db`.
+No ejecutar `migrate:fresh` sin `--env=testing`, ya que podría eliminar la base
+de desarrollo `proyecto_db`.
+
 ## Comandos útiles
 ```powershell
 docker compose exec backend php artisan test            # pruebas (PHPUnit)

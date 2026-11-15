@@ -1,0 +1,415 @@
+{
+  "info": {
+    "_postman_id": "f5b1d6b1-4bd0-4af4-9f2d-qa-inventario-api",
+    "name": "Inventario Electrónico - API QA",
+    "description": "Colección de verificación funcional y de autorización de la API REST. Ejecutar contra datos semilla.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "api_url", "value": "{{base_url}}/api" },
+    { "key": "admin_token", "value": "" },
+    { "key": "ventas_token", "value": "" },
+    { "key": "almacen_token", "value": "" },
+    { "key": "branch_id", "value": "" },
+    { "key": "target_branch_id", "value": "" },
+    { "key": "category_id", "value": "" },
+    { "key": "product_id", "value": "" },
+    { "key": "location_id", "value": "" },
+    { "key": "target_location_id", "value": "" },
+    { "key": "created_category_id", "value": "" },
+    { "key": "created_product_id", "value": "" },
+    { "key": "created_branch_id", "value": "" },
+    { "key": "created_location_id", "value": "" },
+    { "key": "created_user_id", "value": "" },
+    { "key": "movement_id", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Respuesta menor a 2 segundos', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": { "method": "GET", "url": "{{base_url}}/up" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 - Autenticación",
+      "item": [
+        {
+          "name": "Login administrador",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{admin_email}}\",\"password\":\"{{admin_password}}\"}" },
+            "url": "{{api_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.response.to.have.status(200);",
+            "const json = pm.response.json();",
+            "pm.expect(json.data.token).to.be.a('string').and.not.empty;",
+            "pm.environment.set('admin_token', json.data.token);"
+          ] } }]
+        },
+        {
+          "name": "Login ventas",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{ventas_email}}\",\"password\":\"{{ventas_password}}\"}" },
+            "url": "{{api_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.response.to.have.status(200);",
+            "pm.environment.set('ventas_token', pm.response.json().data.token);"
+          ] } }]
+        },
+        {
+          "name": "Login almacén",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{almacen_email}}\",\"password\":\"{{almacen_password}}\"}" },
+            "url": "{{api_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.response.to.have.status(200);",
+            "pm.environment.set('almacen_token', pm.response.json().data.token);"
+          ] } }]
+        },
+        {
+          "name": "Login inválido - 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"admin@inventario.test\",\"password\":\"incorrecta\"}" },
+            "url": "{{api_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(401);"] } }]
+        },
+        {
+          "name": "Usuario actual",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{api_url}}/auth/me"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.expect(pm.response.json().data.role).to.eql('admin');"] } }]
+        },
+        {
+          "name": "Me sin token - 401",
+          "request": { "method": "GET", "url": "{{api_url}}/auth/me" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(401);"] } }]
+        }
+      ]
+    },
+    {
+      "name": "02 - Catálogo",
+      "item": [
+        {
+          "name": "Listar categorías",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/categories" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.environment.set('category_id', pm.response.json().data[0].id);"] } }]
+        },
+        {
+          "name": "Ver categoría",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/categories/{{category_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Crear categoría",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Postman QA {{$timestamp}}\",\"code_prefix\":\"PQA{{$timestamp}}\",\"description\":\"Categoría creada por colección Postman\"}" },
+            "url": "{{api_url}}/categories"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.environment.set('created_category_id', pm.response.json().data.id);"] } }]
+        },
+        {
+          "name": "Actualizar categoría",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Postman QA Actualizada {{$timestamp}}\",\"description\":\"Categoría actualizada\"}" },
+            "url": "{{api_url}}/categories/{{created_category_id}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Eliminar categoría creada",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/categories/{{created_category_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(204);"] } }]
+        },
+        {
+          "name": "Listar productos y guardar IDs",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/products" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.response.to.have.status(200);",
+            "const data = pm.response.json().data[0];",
+            "pm.environment.set('product_id', data.id);"
+          ] } }]
+        },
+        {
+          "name": "Ver producto",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/products/{{product_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Crear producto",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"sku\":\"POSTMAN-{{$timestamp}}\",\"barcode\":\"779{{$timestamp}}\",\"name\":\"Componente QA Postman\",\"category_id\":{{category_id}},\"brand\":\"QA\",\"model\":\"P-TEST\",\"unit\":\"UND\",\"unit_cost\":1.25,\"unit_price\":2.50,\"min_stock\":5,\"specs\":{\"package_type\":\"DIP\",\"voltage\":\"5V\",\"tolerance\":\"1%\"},\"is_active\":true}" },
+            "url": "{{api_url}}/products"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.environment.set('created_product_id', pm.response.json().data.id);"] } }]
+        },
+        {
+          "name": "Actualizar producto",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Componente QA Actualizado\",\"unit_price\":3.00,\"min_stock\":8}" },
+            "url": "{{api_url}}/products/{{created_product_id}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Eliminar producto creado",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/products/{{created_product_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(204);"] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 - Sucursales y ubicaciones",
+      "item": [
+        {
+          "name": "Listar sucursales y capturar IDs",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/branches?is_active=1" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.response.to.have.status(200);",
+            "const branches = pm.response.json().data;",
+            "pm.environment.set('branch_id', branches[0].id);",
+            "pm.environment.set('target_branch_id', branches[1].id);"
+          ] } }]
+        },
+        {
+          "name": "Listar ubicaciones origen",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/locations?branch_id={{branch_id}}&is_active=1" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.environment.set('location_id', pm.response.json().data[0].id);"] } }]
+        },
+        {
+          "name": "Listar ubicaciones destino",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/locations?branch_id={{target_branch_id}}&is_active=1" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.environment.set('target_location_id', pm.response.json().data[0].id);"] } }]
+        },
+        {
+          "name": "Crear sucursal",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"code\":\"PQA-{{$timestamp}}\",\"name\":\"Sucursal Postman QA\",\"address\":\"Av. QA 123\",\"phone\":\"999999999\",\"is_active\":true}" },
+            "url": "{{api_url}}/branches"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.environment.set('created_branch_id', pm.response.json().data.id);"] } }]
+        },
+        {
+          "name": "Actualizar sucursal",
+          "request": { "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\":\"Sucursal Postman QA Actualizada\"}" }, "url": "{{api_url}}/branches/{{created_branch_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Eliminar sucursal creada",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/branches/{{created_branch_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(204);"] } }]
+        },
+        {
+          "name": "Crear ubicación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"branch_id\":{{branch_id}},\"code\":\"PQA-LOC-{{$timestamp}}\",\"shelf\":\"Z9\",\"level\":\"N3\",\"bin\":\"C8\",\"description\":\"Ubicación creada por Postman\"}" },
+            "url": "{{api_url}}/locations"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.environment.set('created_location_id', pm.response.json().data.id);"] } }]
+        },
+        {
+          "name": "Actualizar ubicación",
+          "request": { "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"shelf\":\"Z9-QA\",\"description\":\"Ubicación actualizada\"}" }, "url": "{{api_url}}/locations/{{created_location_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Eliminar ubicación creada",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }], "url": "{{api_url}}/locations/{{created_location_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(204);"] } }]
+        }
+      ]
+    },
+    {
+      "name": "04 - Stock y movimientos",
+      "item": [
+        {
+          "name": "Consultar stock",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/stock" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Buscar stock",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/stock/search?q=RES&branch_id={{branch_id}}&only_available=true" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.expect(pm.response.json().data).to.be.an('array');"] } }]
+        },
+        {
+          "name": "Buscar stock con menos de dos caracteres - 422",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/stock/search?q=R" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(422);"] } }]
+        },
+        {
+          "name": "Registrar entrada",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"branch_id\":{{branch_id}},\"supplier_name\":\"Proveedor Postman QA\",\"reference_code\":\"PQA-ENT-{{$timestamp}}\",\"items\":[{\"product_id\":{{product_id}},\"location_id\":{{location_id}},\"quantity\":2,\"unit_cost\":1.50}]}" },
+            "url": "{{api_url}}/movements/entry"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.environment.set('movement_id', pm.response.json().data.items[0].kardex_id);"] } }]
+        },
+        {
+          "name": "Registrar salida",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"branch_id\":{{branch_id}},\"reason\":\"sale\",\"reference_code\":\"PQA-SAL-{{$timestamp}}\",\"items\":[{\"product_id\":{{product_id}},\"location_id\":{{location_id}},\"quantity\":1}]}" },
+            "url": "{{api_url}}/movements/exit"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);"] } }]
+        },
+        {
+          "name": "Listar movimientos",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }], "url": "{{api_url}}/movements?product_id={{product_id}}&per_page=5" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.environment.set('movement_id', pm.response.json().data[0].id);"] } }]
+        },
+        {
+          "name": "Ver movimiento",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }], "url": "{{api_url}}/movements/{{movement_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Salida con stock insuficiente - 409",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"branch_id\":{{branch_id}},\"reason\":\"sale\",\"items\":[{\"product_id\":{{product_id}},\"location_id\":{{location_id}},\"quantity\":999999}]}" }, "url": "{{api_url}}/movements/exit" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(409);"] } }]
+        },
+        {
+          "name": "Transferencia entre sucursales",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"source_branch_id\":{{branch_id}},\"target_branch_id\":{{target_branch_id}},\"reference_code\":\"PQA-TRA-{{$timestamp}}\",\"items\":[{\"product_id\":{{product_id}},\"source_location_id\":{{location_id}},\"target_location_id\":{{target_location_id}},\"quantity\":1}]}" }, "url": "{{api_url}}/movements/transfer" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);"] } }]
+        }
+      ]
+    },
+    {
+      "name": "05 - Alertas y reportes",
+      "item": [
+        {
+          "name": "Alertas de stock mínimo",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/alerts/low-stock?branch_id={{target_branch_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.expect(pm.response.json().data).to.be.an('array');"] } }]
+        },
+        {
+          "name": "Dashboard",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/reports/dashboard-summary" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);", "pm.expect(pm.response.json().data).to.have.property('active_skus');"] } }]
+        },
+        {
+          "name": "Rotación",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/reports/rotation?date_from=2026-01-01&date_to=2026-12-31" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Kardex de producto",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }], "url": "{{api_url}}/reports/kardex/{{product_id}}?branch_id={{branch_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        }
+      ]
+    },
+    {
+      "name": "06 - Usuarios y auditoría",
+      "item": [
+        {
+          "name": "Listar usuarios",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/users?is_active=1" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Crear usuario",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\":\"Postman QA User\",\"email\":\"postman.qa.{{$timestamp}}@inventario.test\",\"password\":\"Postman#2026\",\"role\":\"almacen\",\"branch_id\":{{branch_id}},\"is_active\":true}" }, "url": "{{api_url}}/users" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(201);", "pm.environment.set('created_user_id', pm.response.json().data.id);"] } }]
+        },
+        {
+          "name": "Actualizar usuario",
+          "request": { "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\":\"Postman QA User Updated\",\"role\":\"ventas\",\"is_active\":false}" }, "url": "{{api_url}}/users/{{created_user_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Auditoría",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/audit-logs?per_page=10" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        }
+      ]
+    },
+    {
+      "name": "07 - Casos negativos",
+      "item": [
+        {
+          "name": "Sin token - 401",
+          "request": { "method": "GET", "url": "{{api_url}}/users" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(401);"] } }]
+        },
+        {
+          "name": "Ventas sin permiso de usuarios - 403",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }], "url": "{{api_url}}/users" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(403);"] } }]
+        },
+        {
+          "name": "Ventas sin permiso para crear productos - 403",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{ventas_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{}" }, "url": "{{api_url}}/products" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(403);"] } }]
+        },
+        {
+          "name": "Usuario inválido - 422",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"email\":\"invalido\"}" }, "url": "{{api_url}}/users" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(422);"] } }]
+        },
+        {
+          "name": "Sucursal inexistente - 422",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{almacen_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"branch_id\":999999,\"code\":\"PQA-INVALID\",\"shelf\":\"A\",\"level\":\"1\",\"bin\":\"1\"}" }, "url": "{{api_url}}/locations" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(422);"] } }]
+        },
+        {
+          "name": "Usuario autenticado alternativo",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/user" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(200);"] } }]
+        },
+        {
+          "name": "Logout administrador",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }], "url": "{{api_url}}/auth/logout" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.response.to.have.status(204);"] } }]
+        }
+      ]
+    }
+  ]
+}

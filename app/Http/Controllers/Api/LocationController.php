@@ -31,6 +31,10 @@ class LocationController extends Controller
             $query->where('id_sucursal', $request->integer('branch_id'));
         }
 
+        if ($request->filled('is_active')) {
+            $query->where('estado', $request->boolean('is_active') ? 'disponible' : 'inactiva');
+        }
+
         if ($request->filled('q')) {
             $search = $request->string('q')->toString();
             $query->where(function ($subQuery) use ($search): void {

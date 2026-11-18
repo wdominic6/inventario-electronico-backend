@@ -78,7 +78,7 @@ Este documento define el contrato inmutable de comunicación entre `backend` (La
 ---
 
 ### Módulo 4: Consultas en Tiempo Real y Disponibilidad Multi-Sucursal (Ventas)
-*Archivo Backend*: `routes/api_consultas.php` (**Anthony**) | *Servicio Frontend*: `src/services/consultas.service.js` (**Franklin**)
+*Archivo Backend*: `routes/api_consultas.php` (**Anthony**) | *Servicio Frontend*: `src/services/consultas.service.js` (**William**)
 
 | Método | Ruta | Roles Permitidos | Descripción y Payload Clave |
 | :--- | :--- | :--- | :--- |
@@ -89,7 +89,7 @@ Este documento define el contrato inmutable de comunicación entre `backend` (La
 ---
 
 ### Módulo 5: Reportes Estratégicos y Alertas de Desabastecimiento
-*Archivo Backend*: `routes/api_consultas.php` (**Anthony**) | *Servicio Frontend*: `src/services/reportes.service.js` (**Franklin**)
+*Archivo Backend*: `routes/api_consultas.php` (**Anthony**) | *Servicio Frontend*: `src/services/reportes.service.js` (**William**)
 
 | Método | Ruta | Roles Permitidos | Descripción y Payload Clave |
 | :--- | :--- | :--- | :--- |

@@ -26,7 +26,7 @@ Este skill guía la implementación de los módulos asignados a **Quispe Cruz An
 ### B. Endpoints de Consultas Multi-Sucursal y Reportes (`routes/api_consultas.php`)
 1. Implementa `StockQueryController` (`GET /api/stock/search`, `GET /api/stock/availability/{product}`, `GET /api/stock/by-branch/{branch}`) usando `with(['category', 'stocks.branch', 'stocks.location'])` para evitar problemas N+1.
 2. Implementa `AlertController` (`GET /api/alerts/low-stock`) y `ReportController` (`dashboard-summary`, `rotation`, `kardex/{product}`).
-3. Devuelve siempre los datos mediante `JsonResource` cumpliendo el contrato JSON para que **Franklin** los consuma en el frontend sin fricción.
+3. Devuelve siempre los datos mediante `JsonResource` cumpliendo el contrato JSON para que **William** los consuma en el frontend sin fricción.
 
 ### C. Ejecución de Pruebas Técnicas y de Concurrencia (QA)
 1. Escribe pruebas en `tests/Feature/` cubriendo:

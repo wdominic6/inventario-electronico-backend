@@ -19,6 +19,7 @@ class AuditLogResource extends JsonResource
             'action' => $this->accion,
             'entity_type' => $this->tabla_afectada,
             'entity_id' => $this->registro_id,
+            'old_values' => $this->valores_anteriores,
             'details' => $this->valores_nuevos,
             'ip_address' => $this->ip_address,
             'user_agent' => $this->user_agent,

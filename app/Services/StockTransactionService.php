@@ -36,7 +36,7 @@ class StockTransactionService
                 ->values()
                 ->all();
 
-            $entryId = DB::table('entradas_inventario')->insertGetId([
+            $entryId = $this->insertHeader('entradas_inventario', 'id_entrada', $referenceCode, [
                 'codigo_entrada' => $referenceCode,
                 'id_sucursal' => $branchId,
                 'id_proveedor' => Proveedor::query()->firstOrCreate(
@@ -44,9 +44,10 @@ class StockTransactionService
                     ['estado' => 'activo']
                 )->id_proveedor,
                 'id_usuario' => $userId,
+                'fecha_entrada' => now(),
                 'estado' => 'Completado',
                 'observacion' => $notes,
-            ], 'id_entrada');
+            ]);
 
             $items = [];
             foreach ($sortedItems as $item) {
@@ -117,7 +118,7 @@ class StockTransactionService
                 'notes' => $notes,
                 'items' => $items,
             ];
-        });
+        }, 3);
     }
 
     /**
@@ -133,6 +134,9 @@ class StockTransactionService
             $referenceCode = $data['reference_code'] ?? 'SAL-'.Str::upper(Str::random(10));
             $reason = (string) $data['reason'];
             $notes = $data['notes'] ?? null;
+            $observacion = $notes !== null && trim($notes) !== ''
+                ? sprintf('[%s] %s', $reason, trim($notes))
+                : $reason;
 
             // Ordenar ítems por product_id y location_id para prevenir deadlocks en MySQL 8.4 InnoDB
             $sortedItems = collect($data['items'])
@@ -143,14 +147,15 @@ class StockTransactionService
                 ->values()
                 ->all();
 
-            $exitId = DB::table('salidas_inventario')->insertGetId([
+            $exitId = $this->insertHeader('salidas_inventario', 'id_salida', $referenceCode, [
                 'codigo_salida' => $referenceCode,
                 'id_sucursal' => $branchId,
                 'id_usuario' => $userId,
                 'cliente_referencia' => $data['customer_reference'] ?? null,
+                'fecha_salida' => now(),
                 'estado' => 'Completado',
-                'observacion' => $notes ?? $reason,
-            ], 'id_salida');
+                'observacion' => $observacion,
+            ]);
 
             $kardexType = $reason === 'sale' ? 'Salida Venta' : 'Ajuste Negativo';
 
@@ -196,7 +201,7 @@ class StockTransactionService
                     quantity: $quantity,
                     previous: $previous,
                     result: $new,
-                    notes: $notes ?? $reason,
+                    notes: $observacion,
                     exitId: $exitId
                 );
 
@@ -230,7 +235,7 @@ class StockTransactionService
                 'notes' => $notes,
                 'items' => $items,
             ];
-        });
+        }, 3);
     }
 
     /**
@@ -257,16 +262,17 @@ class StockTransactionService
                 ->values()
                 ->all();
 
-            $transferId = DB::table('transferencias')->insertGetId([
+            $transferId = $this->insertHeader('transferencias', 'id_transferencia', $referenceCode, [
                 'codigo_transferencia' => $referenceCode,
                 'id_sucursal_origen' => $sourceBranchId,
                 'id_sucursal_destino' => $targetBranchId,
                 'id_usuario_solicitante' => $userId,
                 'estado' => 'Aprobada',
                 'estado_logistico' => 'Recibida Completa',
+                'fecha_solicitud' => now(),
                 'fecha_despacho' => now(),
                 'fecha_recepcion' => now(),
-            ], 'id_transferencia');
+            ]);
 
             $items = [];
             foreach ($sortedItems as $item) {
@@ -321,7 +327,7 @@ class StockTransactionService
                     'cantidad_recibida' => $quantity,
                 ]);
 
-                $this->writeKardex(
+                $sourceKardexId = $this->writeKardex(
                     userId: $userId,
                     branchId: $sourceBranchId,
                     productId: $productId,
@@ -334,7 +340,7 @@ class StockTransactionService
                     transferId: $transferId
                 );
 
-                $this->writeKardex(
+                $targetKardexId = $this->writeKardex(
                     userId: $userId,
                     branchId: $targetBranchId,
                     productId: $productId,
@@ -348,6 +354,9 @@ class StockTransactionService
                 );
 
                 $items[] = [
+                    'kardex_id' => $sourceKardexId,
+                    'source_kardex_id' => $sourceKardexId,
+                    'target_kardex_id' => $targetKardexId,
                     'product_id' => $productId,
                     'source_location_id' => $sourceLocationId,
                     'target_location_id' => $targetLocationId,
@@ -384,7 +393,26 @@ class StockTransactionService
                 'notes' => $notes,
                 'items' => $items,
             ];
-        });
+        }, 3);
+    }
+
+    /**
+     * Inserta la cabecera de un movimiento. Si dos peticiones concurrentes usan el mismo
+     * código de referencia (carrera que la validación previa no puede detectar), el índice
+     * UNIQUE de la BD lo rechaza y se responde 409 Conflict en lugar de un error 500.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    private function insertHeader(string $table, string $primaryKey, string $referenceCode, array $values): int
+    {
+        try {
+            return (int) DB::table($table)->insertGetId($values, $primaryKey);
+        } catch (UniqueConstraintViolationException) {
+            throw new ConflictHttpException(sprintf(
+                'El código de referencia "%s" ya fue registrado por otra operación.',
+                $referenceCode
+            ));
+        }
     }
 
     private function lockStock(int $branchId, int $productId, int $locationId): ?object
@@ -399,23 +427,16 @@ class StockTransactionService
 
     private function lockOrCreateStock(int $branchId, int $productId, int $locationId): object
     {
-        $stock = $this->lockStock($branchId, $productId, $locationId);
-        if ($stock !== null) {
-            return $stock;
-        }
-
-        try {
-            DB::table('stocks')->insert([
-                'id_producto' => $productId,
-                'id_sucursal' => $branchId,
-                'id_ubicacion' => $locationId,
-                'cantidad' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } catch (UniqueConstraintViolationException) {
-            // Otra transacción concurrente insertó la fila primero; la bloqueamos abajo.
-        }
+        // Insertar primero con insertOrIgnore evita gap-lock deadlocks cuando dos transacciones
+        // concurrentes intentan crear la misma fila bajo REPEATABLE READ en MySQL 8.4 InnoDB.
+        DB::table('stocks')->insertOrIgnore([
+            'id_producto' => $productId,
+            'id_sucursal' => $branchId,
+            'id_ubicacion' => $locationId,
+            'cantidad' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         return $this->lockStock($branchId, $productId, $locationId)
             ?? throw new \RuntimeException('No se pudo bloquear el registro de stock.');
@@ -468,6 +489,7 @@ class StockTransactionService
             'stock_anterior' => $previous,
             'stock_resultante' => $result,
             'observacion' => $notes,
+            'fecha_hora' => now(),
         ], 'id_movimiento_kardex');
     }
 }

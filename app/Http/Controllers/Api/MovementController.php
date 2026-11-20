@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Movement\IndexMovementRequest;
 use App\Http\Requests\Movement\StoreEntryMovementRequest;
 use App\Http\Requests\Movement\StoreExitMovementRequest;
 use App\Http\Requests\Movement\StoreTransferMovementRequest;
@@ -10,7 +11,6 @@ use App\Http\Resources\MovementResource;
 use App\Services\StockTransactionService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 
@@ -23,7 +23,7 @@ class MovementController extends Controller
     /**
      * GET /api/movements
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexMovementRequest $request): AnonymousResourceCollection
     {
         $query = $this->baseQuery();
 

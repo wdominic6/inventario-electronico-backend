@@ -99,17 +99,45 @@ class UserController extends Controller
     public function update(UpdateUserRequest $request, Usuario $user): UserResource
     {
         $data = $request->validated();
-
-        $user->update(array_filter([
-            'email' => $data['email'] ?? null,
-            'id_rol' => isset($data['role']) ? $this->roleId($data['role']) : null,
-            'id_sucursal' => $data['branch_id'] ?? null,
-            'nombre' => isset($data['name']) ? explode(' ', trim($data['name']), 2)[0] : null,
-            'apellido' => isset($data['name']) ? (explode(' ', trim($data['name']), 2)[1] ?? '') : null,
-            'password_hash' => ! empty($data['password']) ? Hash::make($data['password']) : null,
-            'estado' => array_key_exists('is_active', $data) ? ($data['is_active'] ? 'activo' : 'inactivo') : null,
-        ], static fn ($value): bool => $value !== null));
         $user->load(['rol', 'sucursal']);
+
+        $before = [
+            'name' => trim($user->nombre.' '.$user->apellido),
+            'email' => $user->email,
+            'role' => $user->nombreRol(),
+            'branch_id' => $user->id_sucursal,
+            'estado' => $user->estado,
+        ];
+
+        $updates = [];
+        if (array_key_exists('email', $data)) {
+            $updates['email'] = $data['email'];
+        }
+        if (array_key_exists('role', $data)) {
+            $updates['id_rol'] = $this->roleId($data['role']);
+        }
+        if (array_key_exists('branch_id', $data)) {
+            $updates['id_sucursal'] = $data['branch_id'];
+        }
+        if (array_key_exists('name', $data)) {
+            [$nombre, $apellido] = array_pad(explode(' ', trim($data['name']), 2), 2, '');
+            $updates['nombre'] = $nombre;
+            $updates['apellido'] = $apellido;
+        }
+        if (! empty($data['password'])) {
+            $updates['password_hash'] = Hash::make($data['password']);
+        }
+        if (array_key_exists('is_active', $data)) {
+            $updates['estado'] = $data['is_active'] ? 'activo' : 'inactivo';
+        }
+
+        $user->update($updates);
+        $user->load(['rol', 'sucursal']);
+
+        // Si el usuario fue desactivado, revocar inmediatamente todos sus tokens activos de Sanctum.
+        if ($user->estado !== 'activo') {
+            $user->tokens()->delete();
+        }
 
         $this->auditService->log(
             action: 'user.updated',
@@ -118,9 +146,11 @@ class UserController extends Controller
             description: 'Actualización de usuario '.$user->email,
             details: [
                 'role' => $user->nombreRol(),
+                'branch_id' => $user->id_sucursal,
                 'estado' => $user->estado,
             ],
-            request: $request
+            request: $request,
+            oldValues: $before
         );
 
         return new UserResource($user);

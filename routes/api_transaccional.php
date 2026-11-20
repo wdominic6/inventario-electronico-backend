@@ -22,7 +22,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Módulo 1: Autenticación pública
-Route::post('/auth/login', [AuthController::class, 'login']);
+// throttle:20,1 limita por IP (20 peticiones/minuto); además AuthController bloquea
+// tras 5 intentos fallidos por combinación email + IP (protección contra fuerza bruta).
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
 
 // Rutas protegidas por token Bearer de Laravel Sanctum
 Route::middleware('auth:sanctum')->group(function (): void {

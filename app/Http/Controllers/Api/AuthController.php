@@ -11,9 +11,21 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    /**
+     * Intentos fallidos permitidos por combinación email + IP antes de bloquear temporalmente.
+     */
+    public const MAX_LOGIN_ATTEMPTS = 5;
+
+    /**
+     * Segundos de bloqueo tras superar el máximo de intentos fallidos.
+     */
+    public const LOGIN_DECAY_SECONDS = 60;
+
     public function __construct(
         protected AuditService $auditService
     ) {}
@@ -24,6 +36,15 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         $credentials = $request->validated();
+        $throttleKey = $this->throttleKey($credentials['email'], (string) $request->ip());
+
+        if (RateLimiter::tooManyAttempts($throttleKey, self::MAX_LOGIN_ATTEMPTS)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+
+            return response()->json([
+                'message' => "Demasiados intentos de inicio de sesión. Intente nuevamente en {$seconds} segundos.",
+            ], 429)->header('Retry-After', (string) $seconds);
+        }
 
         $user = Usuario::query()
             ->with(['rol', 'sucursal'])
@@ -31,12 +52,36 @@ class AuthController extends Controller
             ->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password_hash)) {
+            RateLimiter::hit($throttleKey, self::LOGIN_DECAY_SECONDS);
+
+            if ($user) {
+                $this->auditService->log(
+                    action: 'auth.login_failed',
+                    entityType: 'Usuario',
+                    entityId: $user->id_usuario,
+                    description: 'Intento fallido de inicio de sesión para '.$user->email,
+                    userId: $user->id_usuario,
+                    request: $request
+                );
+            }
+
             return response()->json([
                 'message' => 'Las credenciales proporcionadas son incorrectas.',
             ], 401);
         }
 
+        RateLimiter::clear($throttleKey);
+
         if ($user->estado !== 'activo') {
+            $this->auditService->log(
+                action: 'auth.login_blocked',
+                entityType: 'Usuario',
+                entityId: $user->id_usuario,
+                description: 'Intento de acceso bloqueado para cuenta inactiva '.$user->email,
+                userId: $user->id_usuario,
+                request: $request
+            );
+
             return response()->json([
                 'message' => 'Esta cuenta de usuario se encuentra desactivada.',
             ], 403);
@@ -99,8 +144,19 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if ($user->estado !== 'activo') {
+            return response()->json([
+                'message' => 'Su cuenta de usuario se encuentra inactiva. Contacte al administrador.',
+            ], 403);
+        }
+
         $user->load(['rol', 'sucursal']);
 
         return new UserResource($user);
+    }
+
+    private function throttleKey(string $email, string $ip): string
+    {
+        return 'login:'.Str::transliterate(Str::lower(trim($email))).'|'.$ip;
     }
 }

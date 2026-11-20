@@ -80,19 +80,33 @@ class CategoryController extends Controller
     public function update(UpdateCategoryRequest $request, Categoria $category): CategoryResource
     {
         $data = $request->validated();
-        $category->update([
-            'nombre_categoria' => $data['name'] ?? $category->nombre_categoria,
-            'prefijo_codigo' => $data['code_prefix'] ?? $category->prefijo_codigo,
-            'descripcion' => $data['description'] ?? $category->descripcion,
-        ]);
+        $before = [
+            'name' => $category->nombre_categoria,
+            'code_prefix' => $category->prefijo_codigo,
+            'description' => $category->descripcion,
+        ];
+
+        $updates = [];
+        if (array_key_exists('name', $data)) {
+            $updates['nombre_categoria'] = $data['name'];
+        }
+        if (array_key_exists('code_prefix', $data)) {
+            $updates['prefijo_codigo'] = $data['code_prefix'];
+        }
+        if (array_key_exists('description', $data)) {
+            $updates['descripcion'] = $data['description'];
+        }
+
+        $category->update($updates);
 
         $this->auditService->log(
             action: 'category.updated',
             entityType: 'Category',
             entityId: $category->id_categoria,
             description: 'Actualización de categoría '.$category->nombre_categoria,
-            details: $request->validated(),
-            request: $request
+            details: $data,
+            request: $request,
+            oldValues: $before
         );
 
         return new CategoryResource($category);
@@ -111,6 +125,11 @@ class CategoryController extends Controller
 
         $categoryId = $category->id_categoria;
         $categoryName = $category->nombre_categoria;
+        $before = [
+            'name' => $category->nombre_categoria,
+            'code_prefix' => $category->prefijo_codigo,
+            'description' => $category->descripcion,
+        ];
         $category->delete();
 
         $this->auditService->log(
@@ -118,7 +137,8 @@ class CategoryController extends Controller
             entityType: 'Category',
             entityId: $categoryId,
             description: 'Eliminación de categoría '.$categoryName,
-            request: $request
+            request: $request,
+            oldValues: $before
         );
 
         return response()->noContent();

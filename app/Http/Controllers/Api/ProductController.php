@@ -10,7 +10,6 @@ use App\Models\Fabricante;
 use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Services\AuditService;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -76,25 +75,31 @@ class ProductController extends Controller
     {
         $data = $request->validated();
         $specs = $data['specs'];
-        $product = Producto::query()->create([
-            'id_categoria' => $data['category_id'],
-            'id_fabricante' => $this->manufacturerId($data['brand']),
-            'id_unidad' => $this->unitId($data['unit']),
-            'codigo' => $data['sku'],
-            'codigo_barras' => $data['barcode'] ?? null,
-            'nombre' => $data['name'],
-            'marca' => $data['brand'],
-            'stock_minimo' => $data['min_stock'],
-            'costo_unitario' => $data['unit_cost'],
-            'precio_unitario' => $data['unit_price'],
-            'modelo' => $data['model'] ?? null,
-            'encapsulado' => $specs['package_type'] ?? null,
-            'voltaje_operacion' => $specs['voltage'] ?? null,
-            'tolerancia' => $specs['tolerance'] ?? null,
-            'especificaciones_extra' => $specs,
-            'estado' => ($data['is_active'] ?? true) ? 'activo' : 'inactivo',
-        ]);
-        $this->syncMinStock($product->id_producto, (int) $data['min_stock']);
+
+        $product = DB::transaction(function () use ($data, $specs): Producto {
+            $product = Producto::query()->create([
+                'id_categoria' => $data['category_id'],
+                'id_fabricante' => $this->manufacturerId($data['brand']),
+                'id_unidad' => $this->unitId($data['unit']),
+                'codigo' => $data['sku'],
+                'codigo_barras' => $data['barcode'] ?? null,
+                'nombre' => $data['name'],
+                'marca' => $data['brand'],
+                'stock_minimo' => $data['min_stock'],
+                'costo_unitario' => $data['unit_cost'],
+                'precio_unitario' => $data['unit_price'],
+                'modelo' => $data['model'] ?? null,
+                'encapsulado' => $specs['package_type'] ?? null,
+                'voltaje_operacion' => $specs['voltage'] ?? null,
+                'tolerancia' => $specs['tolerance'] ?? null,
+                'especificaciones_extra' => $specs,
+                'estado' => ($data['is_active'] ?? true) ? 'activo' : 'inactivo',
+            ]);
+            $this->syncMinStock($product->id_producto, (int) $data['min_stock']);
+
+            return $product;
+        });
+
         $product->load(['categoria', 'fabricante', 'unidad']);
 
         $this->auditService->log(
@@ -121,28 +126,70 @@ class ProductController extends Controller
     public function update(UpdateProductRequest $request, Producto $product): ProductResource
     {
         $data = $request->validated();
-        $specs = $data['specs'] ?? null;
-        $product->update(array_filter([
-            'id_categoria' => $data['category_id'] ?? null,
-            'id_fabricante' => isset($data['brand']) ? $this->manufacturerId($data['brand']) : null,
-            'id_unidad' => isset($data['unit']) ? $this->unitId($data['unit']) : null,
-            'codigo' => $data['sku'] ?? null,
-            'codigo_barras' => $data['barcode'] ?? null,
-            'nombre' => $data['name'] ?? null,
-            'marca' => $data['brand'] ?? null,
-            'stock_minimo' => $data['min_stock'] ?? null,
-            'costo_unitario' => $data['unit_cost'] ?? null,
-            'precio_unitario' => $data['unit_price'] ?? null,
-            'modelo' => $data['model'] ?? null,
-            'encapsulado' => $specs['package_type'] ?? null,
-            'voltaje_operacion' => $specs['voltage'] ?? null,
-            'tolerancia' => $specs['tolerance'] ?? null,
-            'especificaciones_extra' => $specs,
-            'estado' => array_key_exists('is_active', $data) ? ($data['is_active'] ? 'activo' : 'inactivo') : null,
-        ], static fn ($value): bool => $value !== null));
-        if (array_key_exists('min_stock', $data)) {
-            $this->syncMinStock($product->id_producto, (int) $data['min_stock']);
+        $before = [
+            'sku' => $product->codigo,
+            'barcode' => $product->codigo_barras,
+            'name' => $product->nombre,
+            'category_id' => $product->id_categoria,
+            'brand' => $product->marca,
+            'model' => $product->modelo,
+            'min_stock' => (int) $product->stock_minimo,
+            'unit_cost' => $product->costo_unitario !== null ? (float) $product->costo_unitario : null,
+            'unit_price' => $product->precio_unitario !== null ? (float) $product->precio_unitario : null,
+            'specs' => $product->especificaciones_extra,
+            'estado' => $product->estado,
+        ];
+
+        $updates = [];
+        if (array_key_exists('category_id', $data)) {
+            $updates['id_categoria'] = $data['category_id'];
         }
+        if (array_key_exists('brand', $data)) {
+            $updates['id_fabricante'] = $this->manufacturerId($data['brand']);
+            $updates['marca'] = $data['brand'];
+        }
+        if (array_key_exists('unit', $data)) {
+            $updates['id_unidad'] = $this->unitId($data['unit']);
+        }
+        if (array_key_exists('sku', $data)) {
+            $updates['codigo'] = $data['sku'];
+        }
+        if (array_key_exists('barcode', $data)) {
+            $updates['codigo_barras'] = $data['barcode'];
+        }
+        if (array_key_exists('name', $data)) {
+            $updates['nombre'] = $data['name'];
+        }
+        if (array_key_exists('min_stock', $data)) {
+            $updates['stock_minimo'] = $data['min_stock'];
+        }
+        if (array_key_exists('unit_cost', $data)) {
+            $updates['costo_unitario'] = $data['unit_cost'];
+        }
+        if (array_key_exists('unit_price', $data)) {
+            $updates['precio_unitario'] = $data['unit_price'];
+        }
+        if (array_key_exists('model', $data)) {
+            $updates['modelo'] = $data['model'];
+        }
+        if (array_key_exists('specs', $data)) {
+            $specs = $data['specs'];
+            $updates['encapsulado'] = $specs['package_type'] ?? null;
+            $updates['voltaje_operacion'] = $specs['voltage'] ?? null;
+            $updates['tolerancia'] = $specs['tolerance'] ?? null;
+            $updates['especificaciones_extra'] = $specs;
+        }
+        if (array_key_exists('is_active', $data)) {
+            $updates['estado'] = $data['is_active'] ? 'activo' : 'inactivo';
+        }
+
+        DB::transaction(function () use ($product, $updates, $data): void {
+            $product->update($updates);
+            if (array_key_exists('min_stock', $data)) {
+                $this->syncMinStock($product->id_producto, (int) $data['min_stock']);
+            }
+        });
+
         $product->load(['categoria', 'fabricante', 'unidad']);
 
         $this->auditService->log(
@@ -150,8 +197,9 @@ class ProductController extends Controller
             entityType: 'Product',
             entityId: $product->id_producto,
             description: 'Actualización de componente electrónico '.$product->nombre.' (código: '.$product->codigo.')',
-            details: $request->validated(),
-            request: $request
+            details: $data,
+            request: $request,
+            oldValues: $before
         );
 
         return new ProductResource($product);
@@ -168,9 +216,12 @@ class ProductController extends Controller
     private function unitId(string $unit): int
     {
         $value = trim($unit);
+        $abbr = mb_strtoupper(mb_substr($value, 0, 10, 'UTF-8'), 'UTF-8');
+
         $record = UnidadMedida::query()
             ->where('nombre', $value)
             ->orWhere('abreviatura', $value)
+            ->orWhere('abreviatura', $abbr)
             ->first();
 
         if ($record) {
@@ -179,7 +230,7 @@ class ProductController extends Controller
 
         return (int) UnidadMedida::query()->create([
             'nombre' => $value,
-            'abreviatura' => strtoupper(substr($value, 0, 10)),
+            'abreviatura' => $abbr,
         ])->id_unidad;
     }
 
@@ -196,25 +247,48 @@ class ProductController extends Controller
 
         $productId = $product->id_producto;
         $productSku = $product->codigo;
+        $before = [
+            'sku' => $product->codigo,
+            'name' => $product->nombre,
+            'estado' => $product->estado,
+        ];
 
-        try {
+        $softDeactivated = DB::transaction(function () use ($product, $productId): bool {
+            if ($this->hasHistoricalReferences($productId)) {
+                $product->update(['estado' => 'inactivo']);
+
+                return true;
+            }
+
             $product->stocks()->where('cantidad', '<=', 0)->delete();
             $product->delete();
-            $description = 'Eliminación de componente electrónico SKU '.$productSku;
-        } catch (QueryException) {
-            $product->update(['estado' => 'inactivo']);
-            $description = 'Baja lógica de componente electrónico SKU '.$productSku.' (posee historial transaccional)';
-        }
+
+            return false;
+        });
+
+        $description = $softDeactivated
+            ? 'Baja lógica de componente electrónico SKU '.$productSku.' (posee historial transaccional)'
+            : 'Eliminación de componente electrónico SKU '.$productSku;
 
         $this->auditService->log(
             action: 'product.deleted',
             entityType: 'Product',
             entityId: $productId,
             description: $description,
-            request: $request
+            request: $request,
+            oldValues: $before
         );
 
         return response()->noContent();
+    }
+
+    private function hasHistoricalReferences(int $productId): bool
+    {
+        return DB::table('movimientos_kardex')->where('id_producto', $productId)->exists()
+            || DB::table('detalles_entrada')->where('id_producto', $productId)->exists()
+            || DB::table('detalles_salida')->where('id_producto', $productId)->exists()
+            || DB::table('detalles_ajuste')->where('id_producto', $productId)->exists()
+            || DB::table('detalles_transferencia')->where('id_producto', $productId)->exists();
     }
 
     private function syncMinStock(int $productId, int $minStock): void

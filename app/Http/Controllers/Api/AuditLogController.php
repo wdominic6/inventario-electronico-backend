@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\IndexAuditLogRequest;
 use App\Http\Resources\AuditLogResource;
 use App\Models\AuditLog;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AuditLogController extends Controller
@@ -13,9 +13,9 @@ class AuditLogController extends Controller
     /**
      * GET /api/audit-logs
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexAuditLogRequest $request): AnonymousResourceCollection
     {
-        $query = AuditLog::query()->with('usuario');
+        $query = AuditLog::query()->with(['usuario.rol', 'usuario.sucursal']);
 
         if ($request->filled('user_id')) {
             $query->where('id_usuario', $request->integer('user_id'));
@@ -37,7 +37,7 @@ class AuditLogController extends Controller
         $perPage = min(max($request->integer('per_page', 15), 1), 100);
 
         return AuditLogResource::collection(
-            $query->latest('id_log')->paginate($perPage)
+            $query->latest('id_log')->paginate($perPage)->withQueryString()
         );
     }
 }

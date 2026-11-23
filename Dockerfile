@@ -15,6 +15,9 @@ RUN apk add --no-cache \
 # Copiar Composer 2 oficial
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Ocultar la cabecera X-Powered-By de PHP en respuestas HTTP
+RUN printf "expose_php=Off\n" > /usr/local/etc/php/conf.d/security.ini
+
 WORKDIR /var/www/html
 
 # Entrypoint que corrige permisos de storage/ y bootstrap/cache (volumen montado desde el host).
